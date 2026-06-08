@@ -139,6 +139,11 @@ export const leads = {
     const { error } = await supabase.from('leads').delete().neq('id', '')
     if (error) throw error
   },
+
+  async bulkInsert(items) {
+    const { error } = await supabase.from('leads').insert(items.map(leadToDB))
+    if (error) throw error
+  },
 }
 
 // ── Interactions ──────────────────────────────────────────
@@ -160,6 +165,11 @@ export const interactions = {
 
   async removeAll() {
     const { error } = await supabase.from('interactions').delete().neq('id', '')
+    if (error) throw error
+  },
+
+  async bulkInsert(items) {
+    const { error } = await supabase.from('interactions').insert(items.map(interactionToDB))
     if (error) throw error
   },
 }
@@ -194,6 +204,11 @@ export const tasks = {
 
   async removeAll() {
     const { error } = await supabase.from('tasks').delete().neq('id', '')
+    if (error) throw error
+  },
+
+  async bulkInsert(items) {
+    const { error } = await supabase.from('tasks').insert(items.map(taskToDB))
     if (error) throw error
   },
 }

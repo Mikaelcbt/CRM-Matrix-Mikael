@@ -1794,7 +1794,7 @@ function MetricsView({ leads, interactions }) {
 // SETTINGS VIEW
 // ─────────────────────────────────────────────────────────
 
-function SettingsView({ config, onConfig, leads, interactions, tasks, toast, onClearData }) {
+function SettingsView({ config, onConfig, leads, interactions, tasks, toast, onClearData, onImport }) {
   const [form, setForm] = useState({ ...config })
   const [notifStatus, setNotifStatus] = useState(
     'Notification' in window ? Notification.permission : 'unsupported'
@@ -1829,13 +1829,9 @@ function SettingsView({ config, onConfig, leads, interactions, tasks, toast, onC
         const data = JSON.parse(ev.target.result)
         if (!data.leads || !Array.isArray(data.leads)) throw new Error('Formato inválido')
         if (window.confirm(`Importar ${data.leads.length} leads? Os dados atuais serão substituídos.`)) {
-          window.localStorage.setItem('mx_leads', JSON.stringify(data.leads))
-          window.localStorage.setItem('mx_interactions', JSON.stringify(data.interactions || []))
-          window.localStorage.setItem('mx_tasks', JSON.stringify(data.tasks || []))
-          toast.success('Backup restaurado! Recarregue a página.')
-          setTimeout(() => window.location.reload(), 1200)
+          onImport(data.leads, data.interactions || [], data.tasks || [])
         }
-      } catch (err) {
+      } catch {
         setImportError('Arquivo inválido. Use um backup gerado pelo CRM.')
       }
     }
@@ -2161,6 +2157,21 @@ export default function App() {
     }
   }
 
+  const handleImportData = async (importedLeads, importedInteractions, importedTasks) => {
+    try {
+      await db.leads.removeAll()
+      if (importedLeads.length) await db.leads.bulkInsert(importedLeads)
+      if (importedInteractions.length) await db.interactions.bulkInsert(importedInteractions)
+      if (importedTasks.length) await db.tasks.bulkInsert(importedTasks)
+      setLeads(importedLeads)
+      setInteractions(importedInteractions)
+      setTasks(importedTasks)
+      toast.success('Backup restaurado!')
+    } catch {
+      toast.error('Erro ao importar dados.')
+    }
+  }
+
   const handleClearData = async () => {
     if (!window.confirm('Apagar TODOS os dados? Esta ação não pode ser desfeita.')) return
     try {
@@ -2244,7 +2255,7 @@ export default function App() {
           {view === 'configuracoes' && (
             <SettingsView config={config} onConfig={handleConfig}
               leads={leads} interactions={interactions} tasks={tasks}
-              toast={toast} onClearData={handleClearData} />
+              toast={toast} onClearData={handleClearData} onImport={handleImportData} />
           )}
         </div>
 
