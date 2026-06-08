@@ -219,8 +219,7 @@ REGRAS:
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' })
+  const apiKey = process.env.GEMINI_API_KEY ?? 'AQ.Ab8RN6IQftmO9bvPEfO3B3-F9YkIM1YBQYa4seczYB3Fou8_WQ'
 
   const { messages, crmContext } = req.body
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages inválido' })
