@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import * as db from './lib/db'
 import {
   LayoutDashboard, Users, BarChart2, CheckSquare, Plus, Search,
   Phone, Mail, MapPin, Zap, Clock, AlertCircle, CheckCircle,
@@ -90,18 +91,18 @@ const d = (n) => new Date(Date.now() - n * 86400000).toISOString()
 const df = (n) => new Date(Date.now() + n * 86400000).toISOString()
 
 const INITIAL_LEADS = [
-  { id: 'l1', nome: 'João Carlos Silva', telefone: '(71) 99876-5432', email: 'joao.silva@gmail.com', cidade: 'Salvador', uf: 'BA', distribuidora: 'Neoenergia Coelba (BA)', consumoMedio: 850, origem: 'indicacao', nomeIndicador: 'Pedro Alves', status: 'em_negociacao', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo', criadoEm: d(18), atualizadoEm: d(2) },
-  { id: 'l2', nome: 'Maria Fernanda Oliveira', telefone: '(11) 98765-4321', email: 'mf.oliveira@hotmail.com', cidade: 'São Paulo', uf: 'SP', distribuidora: 'Enel São Paulo', consumoMedio: 1200, origem: 'instagram', nomeIndicador: '', status: 'proposta_enviada', motivoPerda: '', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(12), atualizadoEm: d(1) },
-  { id: 'l3', nome: 'Carlos Eduardo Santos', telefone: '(21) 97654-3210', email: 'carlos.santos@gmail.com', cidade: 'Rio de Janeiro', uf: 'RJ', distribuidora: 'Light (RJ)', consumoMedio: 720, origem: 'abordagem', nomeIndicador: '', status: 'fechado_ganho', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo2', criadoEm: d(35), atualizadoEm: d(5) },
-  { id: 'l4', nome: 'Ana Paula Costa', telefone: '(31) 96543-2109', email: 'ana.costa@empresa.com', cidade: 'Belo Horizonte', uf: 'MG', distribuidora: 'Cemig (MG)', consumoMedio: 1500, origem: 'indicacao', nomeIndicador: 'Marcos Vieira', status: 'conta_recebida', motivoPerda: '', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(8), atualizadoEm: d(0) },
-  { id: 'l5', nome: 'Roberto Lima', telefone: '(85) 95432-1098', email: '', cidade: 'Fortaleza', uf: 'CE', distribuidora: 'Enel Ceará', consumoMedio: null, origem: 'evento', nomeIndicador: '', status: 'novo_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(1), atualizadoEm: d(0) },
-  { id: 'l6', nome: 'Fernanda Souza', telefone: '(41) 94321-0987', email: 'fernanda.souza@gmail.com', cidade: 'Curitiba', uf: 'PR', distribuidora: 'COPEL (PR)', consumoMedio: 680, origem: 'instagram', nomeIndicador: '', status: 'primeiro_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(4), atualizadoEm: d(1) },
-  { id: 'l7', nome: 'Paulo Henrique Mendes', telefone: '(81) 93210-9876', email: 'paulo.mendes@outlook.com', cidade: 'Recife', uf: 'PE', distribuidora: 'Neoenergia Pernambuco (PE)', consumoMedio: 930, origem: 'indicacao', nomeIndicador: 'João Silva', status: 'aguardando_conta', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(6), atualizadoEm: d(2) },
-  { id: 'l8', nome: 'Luciana Ferreira', telefone: '(51) 92109-8765', email: 'lu.ferreira@gmail.com', cidade: 'Porto Alegre', uf: 'RS', distribuidora: 'CEEE (RS)', consumoMedio: 450, origem: 'abordagem', nomeIndicador: '', status: 'fechado_perdido', motivoPerda: 'Consumo abaixo do mínimo', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(25), atualizadoEm: d(10) },
-  { id: 'l9', nome: 'Marcos Alves', telefone: '(48) 91098-7654', email: 'marcos.alves@hotmail.com', cidade: 'Florianópolis', uf: 'SC', distribuidora: 'Celesc (SC)', consumoMedio: 1100, origem: 'indicacao', nomeIndicador: 'Ana Costa', status: 'aguardando_conta', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(9), atualizadoEm: d(3) },
-  { id: 'l10', nome: 'Juliana Reis', telefone: '(62) 90987-6543', email: 'ju.reis@empresa.com', cidade: 'Goiânia', uf: 'GO', distribuidora: 'Equatorial Goiás', consumoMedio: 800, origem: 'instagram', nomeIndicador: '', status: 'em_negociacao', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo3', criadoEm: d(14), atualizadoEm: d(1) },
-  { id: 'l11', nome: 'Diego Carvalho', telefone: '(92) 99876-1234', email: 'diego.c@gmail.com', cidade: 'Manaus', uf: 'AM', distribuidora: 'Outro', consumoMedio: 2200, origem: 'evento', nomeIndicador: '', status: 'primeiro_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(3), atualizadoEm: d(0) },
-  { id: 'l12', nome: 'Patricia Nunes', telefone: '(79) 98765-9876', email: 'patricia.n@outlook.com', cidade: 'Aracaju', uf: 'SE', distribuidora: 'Energisa Sergipe', consumoMedio: 760, origem: 'indicacao', nomeIndicador: 'Roberto Lima', status: 'fechado_perdido', motivoPerda: 'Sem retorno', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(20), atualizadoEm: d(8) },
+  { id: 'l1', nome: 'João Carlos Silva', telefone: '(71) 99876-5432', email: 'joao.silva@gmail.com', cidade: 'Salvador', uf: 'BA', distribuidora: 'Neoenergia Coelba (BA)', consumoMedio: 850, valorEstimado: 950, origem: 'indicacao', nomeIndicador: 'Pedro Alves', status: 'em_negociacao', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo', criadoEm: d(18), atualizadoEm: d(2) },
+  { id: 'l2', nome: 'Maria Fernanda Oliveira', telefone: '(11) 98765-4321', email: 'mf.oliveira@hotmail.com', cidade: 'São Paulo', uf: 'SP', distribuidora: 'Enel São Paulo', consumoMedio: 1200, valorEstimado: 1450, origem: 'instagram', nomeIndicador: '', status: 'proposta_enviada', motivoPerda: '', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(12), atualizadoEm: d(1) },
+  { id: 'l3', nome: 'Carlos Eduardo Santos', telefone: '(21) 97654-3210', email: 'carlos.santos@gmail.com', cidade: 'Rio de Janeiro', uf: 'RJ', distribuidora: 'Light (RJ)', consumoMedio: 720, valorEstimado: 900, origem: 'abordagem', nomeIndicador: '', status: 'fechado_ganho', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo2', criadoEm: d(35), atualizadoEm: d(5) },
+  { id: 'l4', nome: 'Ana Paula Costa', telefone: '(31) 96543-2109', email: 'ana.costa@empresa.com', cidade: 'Belo Horizonte', uf: 'MG', distribuidora: 'Cemig (MG)', consumoMedio: 1500, valorEstimado: 1800, origem: 'indicacao', nomeIndicador: 'Marcos Vieira', status: 'conta_recebida', motivoPerda: '', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(8), atualizadoEm: d(0) },
+  { id: 'l5', nome: 'Roberto Lima', telefone: '(85) 95432-1098', email: '', cidade: 'Fortaleza', uf: 'CE', distribuidora: 'Enel Ceará', consumoMedio: null, valorEstimado: null, origem: 'evento', nomeIndicador: '', status: 'novo_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(1), atualizadoEm: d(0) },
+  { id: 'l6', nome: 'Fernanda Souza', telefone: '(41) 94321-0987', email: 'fernanda.souza@gmail.com', cidade: 'Curitiba', uf: 'PR', distribuidora: 'COPEL (PR)', consumoMedio: 680, valorEstimado: null, origem: 'instagram', nomeIndicador: '', status: 'primeiro_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(4), atualizadoEm: d(1) },
+  { id: 'l7', nome: 'Paulo Henrique Mendes', telefone: '(81) 93210-9876', email: 'paulo.mendes@outlook.com', cidade: 'Recife', uf: 'PE', distribuidora: 'Neoenergia Pernambuco (PE)', consumoMedio: 930, valorEstimado: null, origem: 'indicacao', nomeIndicador: 'João Silva', status: 'aguardando_conta', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(6), atualizadoEm: d(2) },
+  { id: 'l8', nome: 'Luciana Ferreira', telefone: '(51) 92109-8765', email: 'lu.ferreira@gmail.com', cidade: 'Porto Alegre', uf: 'RS', distribuidora: 'CEEE (RS)', consumoMedio: 450, valorEstimado: null, origem: 'abordagem', nomeIndicador: '', status: 'fechado_perdido', motivoPerda: 'Consumo abaixo do mínimo', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(25), atualizadoEm: d(10) },
+  { id: 'l9', nome: 'Marcos Alves', telefone: '(48) 91098-7654', email: 'marcos.alves@hotmail.com', cidade: 'Florianópolis', uf: 'SC', distribuidora: 'Celesc (SC)', consumoMedio: 1100, valorEstimado: null, origem: 'indicacao', nomeIndicador: 'Ana Costa', status: 'aguardando_conta', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(9), atualizadoEm: d(3) },
+  { id: 'l10', nome: 'Juliana Reis', telefone: '(62) 90987-6543', email: 'ju.reis@empresa.com', cidade: 'Goiânia', uf: 'GO', distribuidora: 'Equatorial Goiás', consumoMedio: 800, valorEstimado: 1050, origem: 'instagram', nomeIndicador: '', status: 'em_negociacao', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo3', criadoEm: d(14), atualizadoEm: d(1) },
+  { id: 'l11', nome: 'Diego Carvalho', telefone: '(92) 99876-1234', email: 'diego.c@gmail.com', cidade: 'Manaus', uf: 'AM', distribuidora: 'Outro', consumoMedio: 2200, valorEstimado: 2800, origem: 'evento', nomeIndicador: '', status: 'primeiro_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(3), atualizadoEm: d(0) },
+  { id: 'l12', nome: 'Patricia Nunes', telefone: '(79) 98765-9876', email: 'patricia.n@outlook.com', cidade: 'Aracaju', uf: 'SE', distribuidora: 'Energisa Sergipe', consumoMedio: 760, valorEstimado: null, origem: 'indicacao', nomeIndicador: 'Roberto Lima', status: 'fechado_perdido', motivoPerda: 'Sem retorno', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(20), atualizadoEm: d(8) },
 ]
 
 const INITIAL_INTERACTIONS = [
@@ -189,10 +190,11 @@ const scoreColor = (score) => {
 }
 
 const exportCSV = (leads) => {
-  const headers = ['Nome','Telefone','Email','Cidade','UF','Distribuidora','Consumo kWh','Origem','Indicador','Etapa','Conta Recebida','Link Documento','Criado em','Atualizado em']
+  const headers = ['Nome','Telefone','Email','Cidade','UF','Distribuidora','Consumo kWh','Valor Estimado R$/mês','Origem','Indicador','Etapa','Conta Recebida','Link Documento','Criado em','Atualizado em']
   const rows = leads.map(l => [
     l.nome, l.telefone, l.email, l.cidade, l.uf, l.distribuidora,
-    l.consumoMedio ?? '', ORIGENS.find(o => o.id === l.origem)?.label ?? l.origem,
+    l.consumoMedio ?? '', l.valorEstimado ?? '',
+    ORIGENS.find(o => o.id === l.origem)?.label ?? l.origem,
     l.nomeIndicador, getStage(l.status).label, l.contaLuzRecebida ? 'Sim' : 'Não',
     l.linkDocumento, fmtDate(l.criadoEm), fmtDate(l.atualizadoEm),
   ])
@@ -622,12 +624,15 @@ function Sidebar({ view, setView, collapsed, setCollapsed, todayTasks, leads, on
 // KANBAN
 // ─────────────────────────────────────────────────────────
 
-function LeadCard({ lead, onClick, onDragStart, tasks }) {
+function LeadCard({ lead, onClick, onDragStart, tasks, interactions }) {
   const stage = getStage(lead.status)
   const pendingTasks = tasks.filter(t => t.leadId === lead.id && !t.concluida)
   const overdueTasks = pendingTasks.filter(t => taskUrgency(t) === 'overdue')
   const todayTasks   = pendingTasks.filter(t => taskUrgency(t) === 'today')
   const origem = ORIGENS.find(o => o.id === lead.origem)
+  const lastContact  = getLastContact(lead.id, interactions || [])
+  const staleDays    = daysSince(lastContact)
+  const isStale      = staleDays !== null && staleDays > 7
 
   return (
     <div
@@ -651,17 +656,29 @@ function LeadCard({ lead, onClick, onDragStart, tasks }) {
       <p className="text-[11px] text-[#888] truncate mb-2.5">{lead.distribuidora}</p>
 
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          {lead.consumoMedio && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {lead.valorEstimado ? (
+            <span className="text-[10px] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-md font-medium">
+              {fmtValor(lead.valorEstimado)}
+            </span>
+          ) : lead.consumoMedio ? (
             <span className="text-[10px] bg-[#141414] text-[#888] px-1.5 py-0.5 rounded-md font-medium">
               {lead.consumoMedio} kWh
             </span>
-          )}
+          ) : null}
           {lead.contaLuzRecebida && (
             <span className="text-[10px] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-md font-medium">Doc ✓</span>
           )}
         </div>
-        <ScoreIndicator score={getLeadScore(lead)} size="xs" />
+        <div className="flex items-center gap-2">
+          {staleDays !== null && (
+            <span className={`flex items-center gap-0.5 text-[10px] ${isStale ? 'text-amber-400' : 'text-[#555]'}`}>
+              <CalendarClock size={10} />
+              {staleDays === 0 ? 'hoje' : `${staleDays}d`}
+            </span>
+          )}
+          <ScoreIndicator score={getLeadScore(lead)} size="xs" />
+        </div>
       </div>
 
       {pendingTasks.length > 0 && (
@@ -676,7 +693,7 @@ function LeadCard({ lead, onClick, onDragStart, tasks }) {
   )
 }
 
-function KanbanColumn({ stage, leads, tasks, onLeadClick, onDragStart, onDragOver, onDrop, onDragLeave, isDragOver }) {
+function KanbanColumn({ stage, leads, tasks, interactions, onLeadClick, onDragStart, onDragOver, onDrop, onDragLeave, isDragOver }) {
 
   return (
     <div
@@ -698,7 +715,7 @@ function KanbanColumn({ stage, leads, tasks, onLeadClick, onDragStart, onDragOve
 
       <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[120px]">
         {leads.map(lead => (
-          <LeadCard key={lead.id} lead={lead} onClick={onLeadClick} onDragStart={onDragStart} tasks={tasks} />
+          <LeadCard key={lead.id} lead={lead} onClick={onLeadClick} onDragStart={onDragStart} tasks={tasks} interactions={interactions} />
         ))}
         {leads.length === 0 && (
           <div className="flex items-center justify-center h-16">
@@ -710,7 +727,7 @@ function KanbanColumn({ stage, leads, tasks, onLeadClick, onDragStart, onDragOve
   )
 }
 
-function KanbanBoard({ leads, tasks, onLeadClick, onStageChange }) {
+function KanbanBoard({ leads, tasks, interactions, onLeadClick, onStageChange }) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
@@ -734,6 +751,7 @@ function KanbanBoard({ leads, tasks, onLeadClick, onStageChange }) {
           stage={stage}
           leads={leads.filter(l => l.status === stage.id)}
           tasks={tasks}
+          interactions={interactions}
           onLeadClick={onLeadClick}
           onDragStart={setDragging}
           onDragOver={setDragOver}
@@ -750,10 +768,10 @@ function KanbanBoard({ leads, tasks, onLeadClick, onStageChange }) {
 // LEAD FORM
 // ─────────────────────────────────────────────────────────
 
-const EMPTY_LEAD = { nome: '', telefone: '', email: '', cidade: '', uf: '', distribuidora: '', consumoMedio: '', origem: '', nomeIndicador: '', contaLuzRecebida: false, linkDocumento: '' }
+const EMPTY_LEAD = { nome: '', telefone: '', email: '', cidade: '', uf: '', distribuidora: '', consumoMedio: '', valorEstimado: '', origem: '', nomeIndicador: '', contaLuzRecebida: false, linkDocumento: '' }
 
 function LeadForm({ lead, onSave, onClose }) {
-  const [form, setForm] = useState(() => lead ? { ...lead, consumoMedio: lead.consumoMedio || '' } : EMPTY_LEAD)
+  const [form, setForm] = useState(() => lead ? { ...lead, consumoMedio: lead.consumoMedio || '', valorEstimado: lead.valorEstimado || '' } : EMPTY_LEAD)
   const [errors, setErrors] = useState({})
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -777,6 +795,7 @@ function LeadForm({ lead, onSave, onClose }) {
     onSave({
       ...form,
       consumoMedio: form.consumoMedio ? parseInt(form.consumoMedio) : null,
+      valorEstimado: form.valorEstimado ? parseFloat(form.valorEstimado) : null,
       id: lead?.id || uid(),
       status: lead?.status || 'novo_contato',
       motivoPerda: lead?.motivoPerda || '',
@@ -812,9 +831,12 @@ function LeadForm({ lead, onSave, onClose }) {
           {errors.distribuidora && <p className="text-xs text-red-400 mt-1">{errors.distribuidora}</p>}
         </div>
         <div>
-          <Input label="Consumo médio (kWh)" type="number" value={form.consumoMedio} onChange={e => set('consumoMedio', e.target.value)} placeholder="Ex: 850" hint="Opcional — preencher após receber a conta" />
+          <Input label="Consumo médio (kWh)" type="number" value={form.consumoMedio} onChange={e => set('consumoMedio', e.target.value)} placeholder="Ex: 850" hint="Preencher após receber a conta" />
         </div>
         <div>
+          <Input label="Valor estimado (R$/mês)" type="number" value={form.valorEstimado} onChange={e => set('valorEstimado', e.target.value)} placeholder="Ex: 1200" hint="Preencher após elaborar a proposta" />
+        </div>
+        <div className="col-span-2">
           <Select label="Origem do lead" required value={form.origem} onChange={e => set('origem', e.target.value)} placeholder="Como chegou?" options={ORIGENS} />
           {errors.origem && <p className="text-xs text-red-400 mt-1">{errors.origem}</p>}
         </div>
@@ -1070,9 +1092,10 @@ function LeadDetail({ lead, interactions, tasks, config, onClose, onUpdate, onDe
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { icon: Zap, label: 'Consumo', value: lead.consumoMedio ? `${lead.consumoMedio} kWh/mês` : 'Não informado', color: '#F59E0B' },
+                  { icon: DollarSign, label: 'Valor estimado', value: lead.valorEstimado ? `${fmtValor(lead.valorEstimado)}/mês` : 'Não definido', color: '#22C55E' },
                   { icon: Tag, label: 'Origem', value: origem?.label || lead.origem, color: '#6366F1' },
                   { icon: MapPin, label: 'Localização', value: `${lead.cidade}/${lead.uf}`, color: '#EF4444' },
-                  { icon: User, label: 'Indicador', value: lead.nomeIndicador || '—', color: '#22C55E' },
+                  { icon: User, label: 'Indicador', value: lead.nomeIndicador || '—', color: '#8B5CF6' },
                 ].map(({ icon: Icon, label, value, color }) => (
                   <div key={label} className="flex items-start gap-2.5 p-2.5 bg-[#1C1C1C] rounded-lg">
                     <Icon size={14} className="mt-0.5 flex-shrink-0" style={{ color }} />
@@ -1231,6 +1254,7 @@ function DashboardView({ leads, tasks, interactions, config, onLeadClick, onComp
   const leadsThisMonth = leads.filter(l => isWithinInterval(parseISO(l.criadoEm), { start: monthStart, end: monthEnd })).length
   const pctLeads = Math.min(Math.round((leadsThisMonth / metaLeads) * 100), 100)
   const pctContratos = Math.min(Math.round((closedThisMonth.length / metaContratos) * 100), 100)
+  const pipelineValor = active.filter(l => l.valorEstimado).reduce((s, l) => s + l.valorEstimado, 0)
 
   const stageCounts = STAGES.map(s => ({ ...s, count: leads.filter(l => l.status === s.id).length }))
   const maxCount = Math.max(...stageCounts.map(s => s.count), 1)
@@ -1242,11 +1266,12 @@ function DashboardView({ leads, tasks, interactions, config, onLeadClick, onComp
   return (
     <div className="p-6 space-y-6">
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-5">
         <Stat label="Total de leads" value={totalLeads} sub="desde o início" color="#FF4500" />
         <Stat label="Ativos" value={active.length} sub="no funil agora" color="#F59E0B" />
         <Stat label="Fechados este mês" value={closedThisMonth.length} sub={format(now, 'MMMM yyyy', { locale: ptBR })} color="#22C55E" />
         <Stat label="Taxa de conversão" value={`${convRate}%`} sub={`${wonLeads} contratos fechados`} color="#6366F1" />
+        <Stat label="Pipeline em valor" value={pipelineValor > 0 ? fmtValor(pipelineValor) : '—'} sub="estimativa mensal ativa" color="#22C55E" />
       </div>
 
       {/* Metas do mês */}
@@ -1353,18 +1378,24 @@ function DashboardView({ leads, tasks, interactions, config, onLeadClick, onComp
 // PIPELINE VIEW
 // ─────────────────────────────────────────────────────────
 
-function PipelineView({ leads, tasks, onLeadClick, onStageChange, onNewLead }) {
+function PipelineView({ leads, tasks, interactions, onLeadClick, onStageChange, onNewLead }) {
+  const pipelineValor = leads
+    .filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido' && l.valorEstimado)
+    .reduce((s, l) => s + l.valorEstimado, 0)
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A1A] flex-shrink-0">
         <div>
           <h2 className="font-semibold text-white">Pipeline</h2>
-          <p className="text-xs text-[#555]">{leads.filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido').length} leads ativos</p>
+          <p className="text-xs text-[#555]">
+            {leads.filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido').length} leads ativos
+            {pipelineValor > 0 && <span className="text-green-400 ml-2">· {fmtValor(pipelineValor)}/mês</span>}
+          </p>
         </div>
         <Btn variant="primary" size="sm" icon={Plus} onClick={onNewLead}>Novo lead</Btn>
       </div>
       <div className="flex-1 overflow-hidden p-4">
-        <KanbanBoard leads={leads} tasks={tasks} onLeadClick={onLeadClick} onStageChange={onStageChange} />
+        <KanbanBoard leads={leads} tasks={tasks} interactions={interactions} onLeadClick={onLeadClick} onStageChange={onStageChange} />
       </div>
     </div>
   )
@@ -1374,7 +1405,7 @@ function PipelineView({ leads, tasks, onLeadClick, onStageChange, onNewLead }) {
 // LEADS VIEW
 // ─────────────────────────────────────────────────────────
 
-function LeadsView({ leads, onLeadClick, onNewLead }) {
+function LeadsView({ leads, interactions, onLeadClick, onNewLead }) {
   const [search, setSearch] = useState('')
   const [filterStage, setFilterStage] = useState('')
   const [filterOrigem, setFilterOrigem] = useState('')
@@ -1390,6 +1421,15 @@ function LeadsView({ leads, onLeadClick, onNewLead }) {
   }, [leads, search, filterStage, filterOrigem])
 
   const origem = (o) => ORIGENS.find(x => x.id === o)?.label || o
+
+  const lastContactLabel = (leadId) => {
+    const d = daysSince(getLastContact(leadId, interactions || []))
+    if (d === null) return { text: '—', cls: 'text-[#555]' }
+    if (d === 0)    return { text: 'Hoje', cls: 'text-green-400' }
+    if (d <= 3)     return { text: `${d}d`, cls: 'text-[#888]' }
+    if (d <= 7)     return { text: `${d}d`, cls: 'text-amber-400' }
+    return { text: `${d}d`, cls: 'text-red-400' }
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -1421,22 +1461,25 @@ function LeadsView({ leads, onLeadClick, onNewLead }) {
         {filtered.length === 0 ? (
           <EmptyState icon={Users} title="Nenhum lead encontrado" description="Tente ajustar os filtros ou cadastrar um novo lead" action={<Btn variant="primary" size="sm" icon={Plus} onClick={onNewLead}>Cadastrar lead</Btn>} />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-[#0A0A0A] z-10">
               <tr className="border-b border-[#1A1A1A]">
-                {['Lead', 'Contato', 'Localização', 'Distribuidora', 'Consumo', 'Origem', 'Etapa', 'Cadastro'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-[#555] uppercase tracking-wider">{h}</th>
+                {['Lead', 'Contato', 'Local / Distribuidora', 'Consumo', 'Valor/mês', 'Origem', 'Últ. contato', 'Etapa', 'Cadastro'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold text-[#555] uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((lead, i) => (
+              {filtered.map((lead, i) => {
+                const lc = lastContactLabel(lead.id)
+                return (
                 <tr key={lead.id} onClick={() => onLeadClick(lead)}
                   className={`border-b border-[#1A1A1A] cursor-pointer hover:bg-[#141414] transition-colors ${i % 2 === 0 ? '' : 'bg-[#0D0D0D]'}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <Avatar name={lead.nome} size="sm" />
-                      <span className="text-sm font-medium text-white">{lead.nome}</span>
+                      <span className="text-sm font-medium text-white whitespace-nowrap">{lead.nome}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -1445,16 +1488,26 @@ function LeadsView({ leads, onLeadClick, onNewLead }) {
                       {lead.email && <p className="text-[11px] text-[#555] truncate max-w-[140px]">{lead.email}</p>}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-[#888]">{lead.cidade}/{lead.uf}</td>
-                  <td className="px-4 py-3 text-xs text-[#888] max-w-[140px] truncate">{lead.distribuidora}</td>
-                  <td className="px-4 py-3 text-xs text-[#888]">{lead.consumoMedio ? `${lead.consumoMedio} kWh` : '—'}</td>
+                  <td className="px-4 py-3">
+                    <p className="text-xs text-[#888]">{lead.cidade}/{lead.uf}</p>
+                    <p className="text-[11px] text-[#555] truncate max-w-[140px]">{lead.distribuidora}</p>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[#888] whitespace-nowrap">{lead.consumoMedio ? `${lead.consumoMedio} kWh` : '—'}</td>
+                  <td className="px-4 py-3 text-xs font-medium whitespace-nowrap" style={{ color: lead.valorEstimado ? '#22C55E' : '#555' }}>
+                    {lead.valorEstimado ? fmtValor(lead.valorEstimado) : '—'}
+                  </td>
                   <td className="px-4 py-3 text-xs text-[#888]">{origem(lead.origem)}</td>
+                  <td className="px-4 py-3 text-xs font-medium whitespace-nowrap">
+                    <span className={lc.cls}>{lc.text}</span>
+                  </td>
                   <td className="px-4 py-3"><StageBadge stageId={lead.status} size="xs" /></td>
-                  <td className="px-4 py-3 text-xs text-[#555]">{fmtDate(lead.criadoEm)}</td>
+                  <td className="px-4 py-3 text-xs text-[#555] whitespace-nowrap">{fmtDate(lead.criadoEm)}</td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
@@ -1462,18 +1515,74 @@ function LeadsView({ leads, onLeadClick, onNewLead }) {
 }
 
 // ─────────────────────────────────────────────────────────
+// TASK FORM MODAL (tarefa avulsa)
+// ─────────────────────────────────────────────────────────
+
+function TaskFormModal({ leads, onAdd, onClose }) {
+  const [desc, setDesc]     = useState('')
+  const [leadId, setLeadId] = useState('')
+  const [date, setDate]     = useState(new Date().toISOString().slice(0, 10))
+
+  const submit = (e) => {
+    e.preventDefault()
+    if (!desc.trim() || !date) return
+    onAdd({
+      id: uid(),
+      leadId: leadId || null,
+      descricao: desc.trim(),
+      dataVencimento: new Date(date + 'T23:59:00').toISOString(),
+      concluida: false,
+      criadaEm: new Date().toISOString(),
+    })
+    onClose()
+  }
+
+  const activeLeads = leads
+    .filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido')
+    .sort((a, b) => a.nome.localeCompare(b.nome))
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <Input label="Descrição" required value={desc} onChange={e => setDesc(e.target.value)} placeholder="O que precisa ser feito?" />
+      <Field label="Lead relacionado">
+        <select value={leadId} onChange={e => setLeadId(e.target.value)} className={inputCls}>
+          <option value="">Sem lead (tarefa avulsa)</option>
+          {activeLeads.map(l => (
+            <option key={l.id} value={l.id}>{l.nome} — {getStage(l.status).short}</option>
+          ))}
+        </select>
+      </Field>
+      <Input label="Vencimento" type="date" required value={date} onChange={e => setDate(e.target.value)} />
+      <div className="flex gap-3 pt-2 border-t border-[#2A2A2A]">
+        <Btn type="button" variant="secondary" onClick={onClose} className="flex-1">Cancelar</Btn>
+        <Btn type="submit" variant="primary" className="flex-1" icon={Plus}>Criar tarefa</Btn>
+      </div>
+    </form>
+  )
+}
+
+// ─────────────────────────────────────────────────────────
 // TASKS VIEW
 // ─────────────────────────────────────────────────────────
 
-function TasksView({ leads, tasks, onLeadClick, onCompleteTask, onDeleteTask }) {
-  const [filter, setFilter] = useState('pending')
+function TasksView({ leads, tasks, onLeadClick, onCompleteTask, onDeleteTask, onAddTask }) {
+  const [filter, setFilter]       = useState('pending')
+  const [search, setSearch]       = useState('')
+  const [showNewTask, setShowNewTask] = useState(false)
   const getLead = (id) => leads.find(l => l.id === id)
 
   const filtered = useMemo(() => {
+    const q = search.toLowerCase()
     return tasks
-      .filter(t => filter === 'all' ? true : filter === 'done' ? t.concluida : !t.concluida)
+      .filter(t => {
+        const statusOk = filter === 'all' ? true : filter === 'done' ? t.concluida : !t.concluida
+        if (!statusOk) return false
+        if (!q) return true
+        const lead = getLead(t.leadId)
+        return t.descricao.toLowerCase().includes(q) || (lead && lead.nome.toLowerCase().includes(q))
+      })
       .sort((a, b) => a.concluida - b.concluida || new Date(a.dataVencimento) - new Date(b.dataVencimento))
-  }, [tasks, filter])
+  }, [tasks, filter, search])
 
   const urgencyStyle = { overdue: 'border-red-500/30 bg-red-500/5', today: 'border-[#FF4500]/30 bg-[#FF4500]/5', tomorrow: 'border-yellow-500/30 bg-yellow-500/5', future: 'border-[#2A2A2A] bg-[#1C1C1C]', done: 'border-[#1A1A1A] bg-[#141414] opacity-50' }
   const urgencyText  = { overdue: 'text-red-400', today: 'text-[#FF4500]', tomorrow: 'text-yellow-400', future: 'text-[#888]', done: 'text-[#555] line-through' }
@@ -1481,16 +1590,26 @@ function TasksView({ leads, tasks, onLeadClick, onCompleteTask, onDeleteTask }) 
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-[#1A1A1A] flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
+      <div className="px-6 py-4 border-b border-[#1A1A1A] flex-shrink-0 space-y-3">
+        <div className="flex items-center justify-between">
           <h2 className="font-semibold text-white">Tarefas</h2>
+          <Btn variant="primary" size="sm" icon={Plus} onClick={() => setShowNewTask(true)}>Nova tarefa</Btn>
         </div>
-        <div className="flex gap-2">
-          {[['pending','Pendentes'],['all','Todas'],['done','Concluídas']].map(([v, l]) => (
-            <button key={v} onClick={() => setFilter(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === v ? 'bg-[#FF4500]/10 text-[#FF4500]' : 'text-[#888] hover:text-white'}`}>{l}</button>
-          ))}
+        <div className="flex gap-3">
+          <div className="flex gap-1">
+            {[['pending','Pendentes'],['all','Todas'],['done','Concluídas']].map(([v, l]) => (
+              <button key={v} onClick={() => setFilter(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === v ? 'bg-[#FF4500]/10 text-[#FF4500]' : 'text-[#888] hover:text-white'}`}>{l}</button>
+            ))}
+          </div>
+          <div className="flex-1 relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por tarefa ou lead..." className={`${inputCls} pl-8 text-xs py-1.5`} />
+          </div>
         </div>
       </div>
+      <Modal isOpen={showNewTask} onClose={() => setShowNewTask(false)} title="Nova tarefa" size="sm">
+        <TaskFormModal leads={leads} onAdd={onAddTask} onClose={() => setShowNewTask(false)} />
+      </Modal>
       <div className="flex-1 overflow-y-auto p-6">
         {filtered.length === 0 ? (
           <EmptyState icon={CheckSquare} title="Nenhuma tarefa" description="Adicione tarefas nos detalhes de cada lead" />
@@ -1547,6 +1666,8 @@ function MetricsView({ leads, interactions }) {
   const active = total - won - lost
   const wonRate = total > 0 ? Math.round((won / total) * 100) : 0
   const closedMonth = leads.filter(l => l.status === 'fechado_ganho' && isWithinInterval(parseISO(l.atualizadoEm), { start: monthStart, end: monthEnd })).length
+  const pipelineValor = leads.filter(l => !['fechado_ganho','fechado_perdido'].includes(l.status) && l.valorEstimado).reduce((s, l) => s + l.valorEstimado, 0)
+  const contractedValor = leads.filter(l => l.status === 'fechado_ganho' && l.valorEstimado).reduce((s, l) => s + l.valorEstimado, 0)
 
   const stageCounts = STAGES.map(s => ({ ...s, count: leads.filter(l => l.status === s.id).length }))
   const maxCount = Math.max(...stageCounts.map(s => s.count), 1)
@@ -1574,11 +1695,13 @@ function MetricsView({ leads, interactions }) {
     <div className="flex-1 overflow-y-auto p-6 space-y-6">
       <div>
         <h2 className="font-semibold text-white mb-4">Métricas</h2>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
           <Stat label="Total de leads" value={total} color="#FF4500" />
           <Stat label="Taxa de conversão" value={`${wonRate}%`} sub={`${won} contratos`} color="#22C55E" />
           <Stat label="Fechados este mês" value={closedMonth} color="#6366F1" />
           <Stat label="Leads ativos" value={active} color="#F59E0B" />
+          <Stat label="Pipeline em valor" value={pipelineValor > 0 ? fmtValor(pipelineValor) : '—'} sub="estimativa/mês" color="#22C55E" />
+          <Stat label="Receita contratada" value={contractedValor > 0 ? fmtValor(contractedValor) : '—'} sub="clientes ganhos/mês" color="#6366F1" />
         </div>
       </div>
 
@@ -1849,22 +1972,61 @@ function SettingsView({ config, onConfig, leads, interactions, tasks, toast, onC
 }
 
 // ─────────────────────────────────────────────────────────
+// MOBILE DRAWER
+// ─────────────────────────────────────────────────────────
+
+function MobileDrawer({ open, onClose, view, setView, todayTasks, leads, onSearchOpen }) {
+  useEffect(() => {
+    if (open) document.body.style.overflow = 'hidden'
+    else document.body.style.overflow = ''
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-[300] md:hidden">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute left-0 top-0 bottom-0 w-72 shadow-2xl animate-slide-up" style={{ animationDuration: '0.2s' }}>
+        <Sidebar
+          view={view}
+          setView={(v) => { setView(v); onClose() }}
+          collapsed={false}
+          setCollapsed={() => {}}
+          todayTasks={todayTasks}
+          leads={leads}
+          onSearchOpen={() => { onSearchOpen(); onClose() }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────
 // APP
 // ─────────────────────────────────────────────────────────
 
 export default function App() {
-  const [leads, setLeads]               = useLocalStorage('mx_leads', INITIAL_LEADS)
-  const [interactions, setInteractions] = useLocalStorage('mx_interactions', INITIAL_INTERACTIONS)
-  const [tasks, setTasks]               = useLocalStorage('mx_tasks', INITIAL_TASKS)
-  const [config, setConfigRaw]          = useLocalStorage('mx_config', DEFAULT_CONFIG)
+  const [leads, setLeads]               = useState([])
+  const [interactions, setInteractions] = useState([])
+  const [tasks, setTasks]               = useState([])
+  const [config, setConfigRaw]          = useState(DEFAULT_CONFIG)
+  const [loading, setLoading]           = useState(true)
   const [view, setView]                 = useState('dashboard')
-  const [collapsed, setCollapsed]       = useState(false)
-  const [selectedLead, setSelectedLead] = useState(null)
-  const [showForm, setShowForm]         = useState(false)
-  const [editingLead, setEditingLead]   = useState(null)
-  const [paletteOpen, setPaletteOpen]   = useState(false)
+  const [collapsed, setCollapsed]         = useState(false)
+  const [selectedLead, setSelectedLead]   = useState(null)
+  const [showForm, setShowForm]           = useState(false)
+  const [editingLead, setEditingLead]     = useState(null)
+  const [paletteOpen, setPaletteOpen]     = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const toast = useToast()
+
+  useEffect(() => {
+    Promise.all([db.leads.list(), db.interactions.list(), db.tasks.list(), db.config.get()])
+      .then(([l, i, t, c]) => { setLeads(l); setInteractions(i); setTasks(t); setConfigRaw(c) })
+      .catch(() => toast.error('Erro ao carregar dados do banco.'))
+      .finally(() => setLoading(false))
+  }, []) // eslint-disable-line
 
   const todayTasks = useMemo(() =>
     tasks.filter(t => !t.concluida && (isToday(parseISO(t.dataVencimento)) || isPast(parseISO(t.dataVencimento)))),
@@ -1900,72 +2062,128 @@ export default function App() {
     }
   }, []) // eslint-disable-line
 
-  const handleConfig = (newConfig) => setConfigRaw(newConfig)
+  const handleConfig = (newConfig) => {
+    setConfigRaw(newConfig)
+    db.config.save(newConfig).catch(() => toast.error('Erro ao salvar configurações.'))
+  }
 
   const handleLeadClick = (lead) => { setSelectedLead(lead); setShowForm(false) }
   const handleNewLead = () => { setEditingLead(null); setShowForm(true); setSelectedLead(null) }
   const handleEditLead = () => { setEditingLead(selectedLead); setShowForm(true); setSelectedLead(null) }
 
-  const handleSaveLead = (lead) => {
-    if (editingLead) {
-      setLeads(prev => prev.map(l => l.id === lead.id ? lead : l))
-      toast.success('Lead atualizado!')
-    } else {
-      setLeads(prev => [lead, ...prev])
-      toast.success('Lead cadastrado!')
+  const handleSaveLead = async (lead) => {
+    try {
+      if (editingLead) {
+        await db.leads.update(lead)
+        setLeads(prev => prev.map(l => l.id === lead.id ? lead : l))
+        toast.success('Lead atualizado!')
+      } else {
+        await db.leads.insert(lead)
+        setLeads(prev => [lead, ...prev])
+        toast.success('Lead cadastrado!')
+      }
+      setShowForm(false)
+      setEditingLead(null)
+    } catch {
+      toast.error('Erro ao salvar lead.')
     }
-    setShowForm(false)
-    setEditingLead(null)
   }
 
-  const handleDeleteLead = () => {
+  const handleDeleteLead = async () => {
     const nome = selectedLead.nome
-    setLeads(prev => prev.filter(l => l.id !== selectedLead.id))
-    setInteractions(prev => prev.filter(i => i.leadId !== selectedLead.id))
-    setTasks(prev => prev.filter(t => t.leadId !== selectedLead.id))
-    setSelectedLead(null)
-    toast.info(`${nome} removido.`)
+    const id = selectedLead.id
+    try {
+      await db.leads.remove(id)
+      setLeads(prev => prev.filter(l => l.id !== id))
+      setInteractions(prev => prev.filter(i => i.leadId !== id))
+      setTasks(prev => prev.filter(t => t.leadId !== id))
+      setSelectedLead(null)
+      toast.info(`${nome} removido.`)
+    } catch {
+      toast.error('Erro ao remover lead.')
+    }
   }
 
-  const handleStageChange = (leadId, newStage, motivo = '') => {
+  const handleStageChange = async (leadId, newStage, motivo = '') => {
     const now = new Date().toISOString()
     const stage = getStage(newStage)
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStage, motivoPerda: motivo, atualizadoEm: now } : l))
-    if (selectedLead?.id === leadId) setSelectedLead(prev => ({ ...prev, status: newStage, motivoPerda: motivo, atualizadoEm: now }))
+    const updated = { status: newStage, motivoPerda: motivo, atualizadoEm: now }
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
+    if (selectedLead?.id === leadId) setSelectedLead(prev => ({ ...prev, ...updated }))
     if (newStage === 'fechado_ganho') toast.success('🎉 Contrato fechado! Parabéns!')
     else toast.info(`Movido para ${stage.label}`)
+    try {
+      const lead = leads.find(l => l.id === leadId)
+      if (lead) await db.leads.update({ ...lead, ...updated })
+    } catch {
+      toast.error('Erro ao atualizar etapa.')
+    }
   }
 
-  const handleAddInteraction = (interaction) => {
-    setInteractions(prev => [interaction, ...prev])
-    toast.success('Interação registrada!')
+  const handleAddInteraction = async (interaction) => {
+    try {
+      await db.interactions.insert(interaction)
+      setInteractions(prev => [interaction, ...prev])
+      toast.success('Interação registrada!')
+    } catch {
+      toast.error('Erro ao registrar interação.')
+    }
   }
 
-  const handleAddTask = (task) => {
-    setTasks(prev => [...prev, task])
-    toast.success('Tarefa criada!')
+  const handleAddTask = async (task) => {
+    try {
+      await db.tasks.insert(task)
+      setTasks(prev => [...prev, task])
+      toast.success('Tarefa criada!')
+    } catch {
+      toast.error('Erro ao criar tarefa.')
+    }
   }
 
-  const handleCompleteTask = (taskId) => {
+  const handleCompleteTask = async (taskId) => {
     const task = tasks.find(t => t.id === taskId)
     const nowDone = !task?.concluida
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, concluida: nowDone } : t))
     if (nowDone) toast.success('Tarefa concluída!')
+    try {
+      if (task) await db.tasks.update({ ...task, concluida: nowDone })
+    } catch {
+      toast.error('Erro ao atualizar tarefa.')
+    }
   }
 
-  const handleDeleteTask = (taskId) => {
+  const handleDeleteTask = async (taskId) => {
     setTasks(prev => prev.filter(t => t.id !== taskId))
+    try {
+      await db.tasks.remove(taskId)
+    } catch {
+      toast.error('Erro ao remover tarefa.')
+    }
   }
 
-  const handleClearData = () => {
+  const handleClearData = async () => {
     if (!window.confirm('Apagar TODOS os dados? Esta ação não pode ser desfeita.')) return
-    setLeads([])
-    setInteractions([])
-    setTasks([])
-    setSelectedLead(null)
-    setShowForm(false)
-    toast.error('Todos os dados foram apagados.')
+    try {
+      await Promise.all([db.leads.removeAll(), db.interactions.removeAll(), db.tasks.removeAll()])
+      setLeads([])
+      setInteractions([])
+      setTasks([])
+      setSelectedLead(null)
+      setShowForm(false)
+      toast.error('Todos os dados foram apagados.')
+    } catch {
+      toast.error('Erro ao apagar dados.')
+    }
   }
+
+  if (loading) return (
+    <div className="flex h-screen bg-[#0A0A0A] items-center justify-center gap-3">
+      <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
+        <Zap size={16} className="text-white" />
+      </div>
+      <p className="text-[#555] text-sm">Carregando dados...</p>
+    </div>
+  )
 
   return (
     <div className="flex h-screen bg-[#0A0A0A] overflow-hidden">
@@ -1983,7 +2201,12 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile header */}
         <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[#1A1A1A]">
-          <MatrixLogo />
+          <div className="flex items-center gap-2">
+            <button onClick={() => setMobileMenuOpen(true)} className="p-2 hover:bg-[#1C1C1C] rounded-lg">
+              <Menu size={18} className="text-[#888]" />
+            </button>
+            <MatrixLogo />
+          </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setPaletteOpen(true)} className="p-2 hover:bg-[#1C1C1C] rounded-lg">
               <Search size={18} className="text-[#888]" />
@@ -2003,11 +2226,11 @@ export default function App() {
             </div>
           )}
           {view === 'pipeline' && (
-            <PipelineView leads={leads} tasks={tasks} onLeadClick={handleLeadClick}
+            <PipelineView leads={leads} tasks={tasks} interactions={interactions} onLeadClick={handleLeadClick}
               onStageChange={handleStageChange} onNewLead={handleNewLead} />
           )}
           {view === 'leads' && (
-            <LeadsView leads={leads} onLeadClick={handleLeadClick} onNewLead={handleNewLead} />
+            <LeadsView leads={leads} interactions={interactions} onLeadClick={handleLeadClick} onNewLead={handleNewLead} />
           )}
           {view === 'metrics' && (
             <div className="h-full overflow-y-auto">
@@ -2016,7 +2239,7 @@ export default function App() {
           )}
           {view === 'tarefas' && (
             <TasksView leads={leads} tasks={tasks} onLeadClick={handleLeadClick}
-              onCompleteTask={handleCompleteTask} onDeleteTask={handleDeleteTask} />
+              onCompleteTask={handleCompleteTask} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
           )}
           {view === 'configuracoes' && (
             <SettingsView config={config} onConfig={handleConfig}
@@ -2041,6 +2264,15 @@ export default function App() {
           </button>
         </div>
       </main>
+
+      {/* Mobile Drawer */}
+      <MobileDrawer
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        view={view} setView={setView}
+        todayTasks={todayTasks} leads={leads}
+        onSearchOpen={() => setPaletteOpen(true)}
+      />
 
       {/* Command Palette */}
       <CommandPalette leads={leads} isOpen={paletteOpen}
