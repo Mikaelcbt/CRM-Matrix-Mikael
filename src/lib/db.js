@@ -19,6 +19,7 @@ function leadFromDB(r) {
     motivoPerda: r.motivo_perda ?? '',
     contaLuzRecebida: r.conta_luz_recebida ?? false,
     linkDocumento: r.link_documento ?? '',
+    anotacoes: r.anotacoes ?? '',
     criadoEm: r.criado_em,
     atualizadoEm: r.atualizado_em,
   }
@@ -41,6 +42,7 @@ function leadToDB(lead) {
     motivo_perda: lead.motivoPerda ?? '',
     conta_luz_recebida: lead.contaLuzRecebida ?? false,
     link_documento: lead.linkDocumento ?? '',
+    anotacoes: lead.anotacoes ?? '',
     criado_em: lead.criadoEm,
     atualizado_em: lead.atualizadoEm,
   }

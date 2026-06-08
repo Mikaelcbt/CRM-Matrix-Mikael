@@ -59,3 +59,13 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     text-wrap: balance;
   }
 }
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
+}

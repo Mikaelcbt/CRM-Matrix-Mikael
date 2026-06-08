@@ -13,7 +13,8 @@ import {
 } from 'lucide-react'
 import {
   format, isToday, isTomorrow, isPast, parseISO,
-  startOfMonth, endOfMonth, isWithinInterval, subMonths
+  startOfMonth, endOfMonth, isWithinInterval, subMonths,
+  addMonths, getDaysInMonth, isSameDay, getDay,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -29,8 +30,12 @@ const STAGES = [
   { id: 'proposta_enviada',  label: 'Proposta Enviada',          color: '#FF4500', bg: 'rgba(255,69,0,0.12)',   short: 'Proposta' },
   { id: 'em_negociacao',     label: 'Em Análise / Negociação',   color: '#EF4444', bg: 'rgba(239,68,68,0.12)',  short: 'Negociando' },
   { id: 'fechado_ganho',     label: 'Fechado (Ganho)',           color: '#22C55E', bg: 'rgba(34,197,94,0.12)',  short: 'Ganho' },
+  { id: 'cobrar_comprovante',label: 'Cobrar Comprovante',        color: '#06B6D4', bg: 'rgba(6,182,212,0.12)',  short: 'Comprovante' },
   { id: 'fechado_perdido',   label: 'Fechado (Perdido)',         color: '#6B7280', bg: 'rgba(107,114,128,0.12)',short: 'Perdido' },
 ]
+
+const POST_SALE_STAGES = new Set(['fechado_ganho', 'cobrar_comprovante'])
+const TERMINAL_STAGES  = new Set(['fechado_ganho', 'cobrar_comprovante', 'fechado_perdido'])
 
 const MOTIVOS_PERDA = [
   'Sem interesse', 'Contrato com outra empresa', 'Consumo abaixo do mínimo',
@@ -79,8 +84,9 @@ const waTemplates = (nome, consultor) => ({
   conta_recebida:   `Olá ${nome}! Já analisei sua conta e tenho *ótimas notícias*! 🎉 Seu perfil é perfeito para o Mercado Livre de Energia. Posso te enviar a proposta com o desconto?`,
   proposta_enviada: `Olá ${nome}! Enviei a proposta recentemente. Teve a oportunidade de ver? Estou à disposição para tirar qualquer dúvida! 🤝`,
   em_negociacao:    `Olá ${nome}! Quero garantir que todas as suas dúvidas sejam respondidas. O que falta para você se sentir confortável com a decisão? 😊`,
-  fechado_ganho:    `Olá ${nome}! Parabéns pela excelente decisão! 🎉⚡ Vou acompanhar todo o processo de migração para garantir que tudo corra perfeitamente!`,
-  fechado_perdido:  `Olá ${nome}! Caso mude de ideia sobre o desconto na conta de luz, estarei à disposição. Obrigado pelo seu tempo! 😊`,
+  fechado_ganho:      `Olá ${nome}! Parabéns pela excelente decisão! 🎉⚡ Vou acompanhar todo o processo de migração para garantir que tudo corra perfeitamente!`,
+  cobrar_comprovante: `Olá ${nome}! Tudo certo com sua migração para o Mercado Livre de Energia! ⚡ Sua fatura já está disponível. Pode me enviar o comprovante de pagamento assim que efetuar? 🙏`,
+  fechado_perdido:    `Olá ${nome}! Caso mude de ideia sobre o desconto na conta de luz, estarei à disposição. Obrigado pelo seu tempo! 😊`,
 })
 
 // ─────────────────────────────────────────────────────────
@@ -479,6 +485,7 @@ const NAV = [
   { id: 'leads',         label: 'Leads',        Icon: Users },
   { id: 'metrics',       label: 'Métricas',     Icon: TrendingUp },
   { id: 'tarefas',       label: 'Tarefas',      Icon: CheckSquare },
+  { id: 'agenda',        label: 'Agenda',       Icon: CalendarClock },
   { id: 'configuracoes', label: 'Configurações', Icon: Settings },
 ]
 
@@ -536,7 +543,7 @@ function Sidebar({ view, setView, collapsed, setCollapsed, todayTasks, leads, on
                 return <div key={s.id} className="flex-1 h-1 rounded-full" style={{ backgroundColor: cnt > 0 ? s.color : '#2A2A2A' }} title={`${s.short}: ${cnt}`} />
               })}
             </div>
-            <p className="text-xs text-[#888]">{leads.filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido').length} ativos</p>
+            <p className="text-xs text-[#888]">{leads.filter(l => !TERMINAL_STAGES.has(l.status)).length} ativos</p>
           </div>
         </div>
       )}
@@ -692,7 +699,7 @@ function KanbanBoard({ leads, tasks, interactions, onLeadClick, onStageChange })
 // LEAD FORM
 // ─────────────────────────────────────────────────────────
 
-const EMPTY_LEAD = { nome: '', telefone: '', email: '', cidade: '', uf: '', distribuidora: '', consumoMedio: '', valorEstimado: '', origem: '', nomeIndicador: '', contaLuzRecebida: false, linkDocumento: '' }
+const EMPTY_LEAD = { nome: '', telefone: '', email: '', cidade: '', uf: '', distribuidora: '', consumoMedio: '', valorEstimado: '', origem: '', nomeIndicador: '', contaLuzRecebida: false, linkDocumento: '', anotacoes: '' }
 
 function LeadForm({ lead, onSave, onClose }) {
   const [form, setForm] = useState(() => lead ? { ...lead, consumoMedio: lead.consumoMedio || '', valorEstimado: lead.valorEstimado || '' } : EMPTY_LEAD)
@@ -851,12 +858,21 @@ function TaskFormInline({ leadId, onAdd, onClose }) {
   )
 }
 
-function LeadDetail({ lead, interactions, tasks, config, onClose, onUpdate, onDelete, onEdit, onAddInteraction, onAddTask, onCompleteTask, onDeleteTask, onStageChange, toast }) {
+function LeadDetail({ lead, interactions, tasks, config, onClose, onUpdateNote, onDelete, onEdit, onAddInteraction, onAddTask, onCompleteTask, onDeleteTask, onStageChange, toast }) {
   const [showInteractionForm, setShowInteractionForm] = useState(false)
   const [showTaskForm, setShowTaskForm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [motivo, setMotivo] = useState(lead.motivoPerda || '')
   const [changingStage, setChangingStage] = useState(lead._requestStage || null)
+  const [noteText, setNoteText] = useState(lead.anotacoes || '')
+  const [noteSaved, setNoteSaved] = useState(false)
+
+  const handleNoteSave = () => {
+    if (noteText === (lead.anotacoes || '')) return
+    onUpdateNote?.(lead.id, noteText)
+    setNoteSaved(true)
+    setTimeout(() => setNoteSaved(false), 2000)
+  }
 
   const leadInteractions = useMemo(() => interactions.filter(i => i.leadId === lead.id).sort((a, b) => new Date(b.data) - new Date(a.data)), [interactions, lead.id])
   const leadTasks = useMemo(() => tasks.filter(t => t.leadId === lead.id).sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento)), [tasks, lead.id])
@@ -1050,6 +1066,26 @@ function LeadDetail({ lead, interactions, tasks, config, onClose, onUpdate, onDe
               </div>
             </div>
 
+            {/* Notes */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-[#555] uppercase tracking-wider">Anotações</p>
+                {noteSaved && (
+                  <span className="text-[10px] text-green-400 flex items-center gap-1">
+                    <CheckCircle size={9} /> Salvo
+                  </span>
+                )}
+              </div>
+              <textarea
+                value={noteText}
+                onChange={e => { setNoteText(e.target.value); setNoteSaved(false) }}
+                onBlur={handleNoteSave}
+                placeholder="Anotações internas sobre este cliente..."
+                rows={4}
+                className="w-full bg-[#141414] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#FF4500] focus:ring-1 focus:ring-[#FF4500]/30 transition-colors resize-none"
+              />
+            </div>
+
             {/* Lost reason */}
             {lead.status === 'fechado_perdido' && lead.motivoPerda && (
               <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
@@ -1164,14 +1200,14 @@ function DashboardView({ leads, tasks, interactions, config, onLeadClick, onComp
   const monthStart = startOfMonth(now)
   const monthEnd   = endOfMonth(now)
 
-  const active = leads.filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido')
-  const closedThisMonth = leads.filter(l => l.status === 'fechado_ganho' && isWithinInterval(parseISO(l.atualizadoEm), { start: monthStart, end: monthEnd }))
+  const active = leads.filter(l => !TERMINAL_STAGES.has(l.status))
+  const closedThisMonth = leads.filter(l => POST_SALE_STAGES.has(l.status) && isWithinInterval(parseISO(l.atualizadoEm), { start: monthStart, end: monthEnd }))
   const todayTasks = tasks.filter(t => !t.concluida && (isToday(parseISO(t.dataVencimento)) || isPast(parseISO(t.dataVencimento))))
   const upcomingTasks = tasks.filter(t => !t.concluida).sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento)).slice(0, 8)
   const recentInteractions = [...interactions].sort((a, b) => new Date(b.data) - new Date(a.data)).slice(0, 5)
 
   const totalLeads = leads.length
-  const wonLeads = leads.filter(l => l.status === 'fechado_ganho').length
+  const wonLeads = leads.filter(l => POST_SALE_STAGES.has(l.status)).length
   const convRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0
   const metaLeads = config?.metaLeadsMes || 20
   const metaContratos = config?.metaContratosMes || 5
@@ -1304,7 +1340,7 @@ function DashboardView({ leads, tasks, interactions, config, onLeadClick, onComp
 
 function PipelineView({ leads, tasks, interactions, onLeadClick, onStageChange, onNewLead }) {
   const pipelineValor = leads
-    .filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido' && l.valorEstimado)
+    .filter(l => !TERMINAL_STAGES.has(l.status) && l.valorEstimado)
     .reduce((s, l) => s + l.valorEstimado, 0)
   return (
     <div className="flex flex-col h-full">
@@ -1312,7 +1348,7 @@ function PipelineView({ leads, tasks, interactions, onLeadClick, onStageChange, 
         <div>
           <h2 className="font-semibold text-white">Pipeline</h2>
           <p className="text-xs text-[#555]">
-            {leads.filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido').length} leads ativos
+            {leads.filter(l => !TERMINAL_STAGES.has(l.status)).length} leads ativos
             {pipelineValor > 0 && <span className="text-green-400 ml-2">· {fmtValor(pipelineValor)}/mês</span>}
           </p>
         </div>
@@ -1442,10 +1478,10 @@ function LeadsView({ leads, interactions, onLeadClick, onNewLead }) {
 // TASK FORM MODAL (tarefa avulsa)
 // ─────────────────────────────────────────────────────────
 
-function TaskFormModal({ leads, onAdd, onClose }) {
+function TaskFormModal({ leads, onAdd, onClose, initialDate }) {
   const [desc, setDesc]     = useState('')
   const [leadId, setLeadId] = useState('')
-  const [date, setDate]     = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate]     = useState(initialDate || new Date().toISOString().slice(0, 10))
 
   const submit = (e) => {
     e.preventDefault()
@@ -1462,7 +1498,7 @@ function TaskFormModal({ leads, onAdd, onClose }) {
   }
 
   const activeLeads = leads
-    .filter(l => l.status !== 'fechado_ganho' && l.status !== 'fechado_perdido')
+    .filter(l => !TERMINAL_STAGES.has(l.status))
     .sort((a, b) => a.nome.localeCompare(b.nome))
 
   return (
@@ -1585,13 +1621,13 @@ function MetricsView({ leads, interactions }) {
   const monthEnd   = endOfMonth(now)
 
   const total = leads.length
-  const won   = leads.filter(l => l.status === 'fechado_ganho').length
+  const won   = leads.filter(l => POST_SALE_STAGES.has(l.status)).length
   const lost  = leads.filter(l => l.status === 'fechado_perdido').length
   const active = total - won - lost
   const wonRate = total > 0 ? Math.round((won / total) * 100) : 0
-  const closedMonth = leads.filter(l => l.status === 'fechado_ganho' && isWithinInterval(parseISO(l.atualizadoEm), { start: monthStart, end: monthEnd })).length
-  const pipelineValor = leads.filter(l => !['fechado_ganho','fechado_perdido'].includes(l.status) && l.valorEstimado).reduce((s, l) => s + l.valorEstimado, 0)
-  const contractedValor = leads.filter(l => l.status === 'fechado_ganho' && l.valorEstimado).reduce((s, l) => s + l.valorEstimado, 0)
+  const closedMonth = leads.filter(l => POST_SALE_STAGES.has(l.status) && isWithinInterval(parseISO(l.atualizadoEm), { start: monthStart, end: monthEnd })).length
+  const pipelineValor = leads.filter(l => !TERMINAL_STAGES.has(l.status) && l.valorEstimado).reduce((s, l) => s + l.valorEstimado, 0)
+  const contractedValor = leads.filter(l => POST_SALE_STAGES.has(l.status) && l.valorEstimado).reduce((s, l) => s + l.valorEstimado, 0)
 
   const stageCounts = STAGES.map(s => ({ ...s, count: leads.filter(l => l.status === s.id).length }))
   const maxCount = Math.max(...stageCounts.map(s => s.count), 1)
@@ -1609,7 +1645,7 @@ function MetricsView({ leads, interactions }) {
     const end = endOfMonth(d)
     return {
       label: format(d, 'MMM', { locale: ptBR }),
-      won: leads.filter(l => l.status === 'fechado_ganho' && isWithinInterval(parseISO(l.atualizadoEm), { start, end })).length,
+      won: leads.filter(l => POST_SALE_STAGES.has(l.status) && isWithinInterval(parseISO(l.atualizadoEm), { start, end })).length,
       created: leads.filter(l => isWithinInterval(parseISO(l.criadoEm), { start, end })).length,
     }
   })
@@ -1766,7 +1802,7 @@ function SettingsView({ config, onConfig, leads, interactions, tasks, toast, onC
   const monthStart = startOfMonth(new Date())
   const monthEnd   = endOfMonth(new Date())
   const leadsThisMonth = leads.filter(l => isWithinInterval(parseISO(l.criadoEm), { start: monthStart, end: monthEnd })).length
-  const closedThisMonth = leads.filter(l => l.status === 'fechado_ganho' && isWithinInterval(parseISO(l.atualizadoEm), { start: monthStart, end: monthEnd })).length
+  const closedThisMonth = leads.filter(l => POST_SALE_STAGES.has(l.status) && isWithinInterval(parseISO(l.atualizadoEm), { start: monthStart, end: monthEnd })).length
 
   return (
     <div className="h-full overflow-y-auto">
@@ -1922,6 +1958,516 @@ function MobileDrawer({ open, onClose, view, setView, todayTasks, leads, onSearc
 }
 
 // ─────────────────────────────────────────────────────────
+// AGENDA VIEW
+// ─────────────────────────────────────────────────────────
+
+function AgendaView({ leads, tasks, interactions, onLeadClick, onCompleteTask, onDeleteTask, onAddTask }) {
+  const [viewMonth, setViewMonth]   = useState(new Date())
+  const [selectedDay, setSelectedDay] = useState(new Date())
+  const [showTaskForm, setShowTaskForm] = useState(false)
+
+  const monthStart    = startOfMonth(viewMonth)
+  const daysInMonth   = getDaysInMonth(viewMonth)
+  const firstDow      = getDay(monthStart) // 0=Dom
+
+  const calendarDays = []
+  for (let i = 0; i < firstDow; i++) calendarDays.push(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    calendarDays.push(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d))
+  }
+
+  const tasksForDay = (date) => {
+    if (!date) return []
+    return tasks.filter(t => { try { return isSameDay(parseISO(t.dataVencimento), date) } catch { return false } })
+  }
+
+  const interactionsForDay = (date) => {
+    if (!date) return []
+    return interactions.filter(i => { try { return isSameDay(parseISO(i.data), date) } catch { return false } })
+  }
+
+  const dayTasks        = selectedDay ? tasksForDay(selectedDay) : []
+  const dayInteractions = selectedDay ? interactionsForDay(selectedDay) : []
+
+  const DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+  return (
+    <div className="flex h-full">
+      {/* Left: calendar */}
+      <div className="flex-1 flex flex-col p-6 overflow-y-auto min-w-0">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-bold text-xl text-white capitalize">
+            {format(viewMonth, 'MMMM yyyy', { locale: ptBR })}
+          </h2>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setViewMonth(m => subMonths(m, 1))}
+              className="p-2 hover:bg-[#1C1C1C] rounded-lg text-[#555] hover:text-white transition-colors">
+              <ChevronLeft size={16} />
+            </button>
+            <button onClick={() => { setViewMonth(new Date()); setSelectedDay(new Date()) }}
+              className="px-3 py-1.5 text-xs rounded-lg bg-[#1C1C1C] text-[#888] hover:text-white hover:bg-[#2A2A2A] transition-colors border border-[#2A2A2A]">
+              Hoje
+            </button>
+            <button onClick={() => setViewMonth(m => addMonths(m, 1))}
+              className="p-2 hover:bg-[#1C1C1C] rounded-lg text-[#555] hover:text-white transition-colors">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Day-of-week headers */}
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {DOW.map(d => (
+            <div key={d} className="text-center text-[10px] font-semibold text-[#444] uppercase tracking-wider py-1">{d}</div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7 gap-1">
+          {calendarDays.map((date, idx) => {
+            if (!date) return <div key={`e-${idx}`} />
+            const dt         = tasksForDay(date)
+            const pending    = dt.filter(t => !t.concluida)
+            const overdue    = pending.filter(t => isPast(parseISO(t.dataVencimento)) && !isToday(date))
+            const done       = dt.filter(t => t.concluida)
+            const interCount = interactionsForDay(date).length
+            const isCurrent  = isToday(date)
+            const isSelected = selectedDay && isSameDay(date, selectedDay)
+            const isPastDay  = isPast(date) && !isCurrent
+
+            return (
+              <div key={date.toISOString()} onClick={() => setSelectedDay(date)}
+                className={`
+                  relative p-2 min-h-[72px] cursor-pointer rounded-xl border transition-all select-none
+                  ${isSelected ? 'border-[#FF4500] bg-[#FF4500]/10' : isCurrent ? 'border-[#FF4500]/40 bg-[#FF4500]/5' : 'border-[#1A1A1A] hover:border-[#2A2A2A] hover:bg-[#0F0F0F]'}
+                  ${isPastDay && !isSelected ? 'opacity-50' : ''}
+                `}>
+                {/* Day number */}
+                <span className={`text-sm font-bold ${isCurrent || isSelected ? 'text-[#FF4500]' : 'text-white'}`}>
+                  {format(date, 'd')}
+                </span>
+
+                {/* Pending count badge */}
+                {pending.length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 text-[9px] font-bold text-[#888]">
+                    {pending.length}
+                  </span>
+                )}
+
+                {/* Dots */}
+                <div className="flex flex-wrap gap-0.5 mt-1.5">
+                  {overdue.slice(0, 2).map(t => <div key={t.id} className="w-1.5 h-1.5 rounded-full bg-red-500" />)}
+                  {pending.filter(t => !overdue.includes(t)).slice(0, 3).map(t => <div key={t.id} className="w-1.5 h-1.5 rounded-full bg-[#FF4500]" />)}
+                  {done.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />}
+                  {interCount > 0 && <div className="w-1.5 h-1.5 rounded-full bg-[#6366F1]" />}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-5 mt-5 pt-4 border-t border-[#1A1A1A]">
+          {[
+            { color: 'bg-red-500',    label: 'Atrasada' },
+            { color: 'bg-[#FF4500]',  label: 'Pendente' },
+            { color: 'bg-[#22C55E]',  label: 'Concluída' },
+            { color: 'bg-[#6366F1]',  label: 'Interação' },
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className={`w-2 h-2 rounded-full ${color}`} />
+              <span className="text-[11px] text-[#555]">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right: day detail */}
+      <div className="w-80 flex-shrink-0 border-l border-[#1A1A1A] flex flex-col">
+        {selectedDay ? (
+          <>
+            <div className="p-5 border-b border-[#1A1A1A]">
+              <p className="text-[10px] font-semibold text-[#555] uppercase tracking-wider capitalize">
+                {format(selectedDay, 'EEEE', { locale: ptBR })}
+              </p>
+              <h3 className="font-bold text-xl text-white mt-0.5 capitalize">
+                {format(selectedDay, "d 'de' MMMM", { locale: ptBR })}
+              </h3>
+              {isToday(selectedDay) && (
+                <span className="inline-block mt-1 text-[10px] font-bold text-[#FF4500] bg-[#FF4500]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Hoje</span>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              {/* Tasks */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <h4 className="text-[10px] font-bold text-[#555] uppercase tracking-wider">
+                    Tarefas ({dayTasks.length})
+                  </h4>
+                  <button onClick={() => setShowTaskForm(true)}
+                    className="flex items-center gap-1 text-[11px] text-[#FF4500] hover:text-[#FF6A35] transition-colors font-medium">
+                    <Plus size={11} /> Adicionar
+                  </button>
+                </div>
+
+                {dayTasks.length === 0 ? (
+                  <p className="text-xs text-[#444] italic">Nenhuma tarefa neste dia.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {dayTasks.map(task => {
+                      const lead = leads.find(l => l.id === task.leadId)
+                      const urg  = taskUrgency(task)
+                      const cls  = {
+                        overdue:  'border-red-500/30 bg-red-500/5',
+                        today:    'border-[#FF4500]/30 bg-[#FF4500]/5',
+                        tomorrow: 'border-yellow-500/30 bg-yellow-500/5',
+                        future:   'border-[#2A2A2A] bg-[#141414]',
+                        done:     'border-[#22C55E]/20 bg-[#22C55E]/5 opacity-60',
+                      }[urg] || 'border-[#2A2A2A] bg-[#141414]'
+
+                      return (
+                        <div key={task.id} className={`flex items-start gap-2.5 p-3 rounded-xl border ${cls}`}>
+                          <button onClick={() => onCompleteTask(task.id)} className="flex-shrink-0 mt-0.5">
+                            {task.concluida
+                              ? <CheckCircle size={14} className="text-[#22C55E]" />
+                              : <Circle size={14} className="text-[#555]" />}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm ${task.concluida ? 'line-through text-[#444]' : 'text-white'}`}>
+                              {task.descricao}
+                            </p>
+                            {lead && (
+                              <button onClick={() => onLeadClick(lead)}
+                                className="text-[11px] text-[#888] hover:text-[#FF4500] transition-colors truncate block mt-0.5">
+                                {lead.nome}
+                              </button>
+                            )}
+                          </div>
+                          <button onClick={() => onDeleteTask(task.id)}
+                            className="flex-shrink-0 text-[#2A2A2A] hover:text-red-400 transition-colors mt-0.5">
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Interactions */}
+              {dayInteractions.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-bold text-[#555] uppercase tracking-wider mb-2.5">
+                    Interações ({dayInteractions.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {dayInteractions.map(inter => {
+                      const lead  = leads.find(l => l.id === inter.leadId)
+                      const canal = CANAIS.find(c => c.id === inter.canal)
+                      return (
+                        <div key={inter.id} className="p-3 rounded-xl border border-[#2A2A2A] bg-[#141414]">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            {canal && <canal.icon size={11} style={{ color: canal.color }} />}
+                            <span className="text-[11px] font-semibold text-[#666]">{canal?.label || inter.canal}</span>
+                            {lead && (
+                              <button onClick={() => onLeadClick(lead)}
+                                className="ml-auto text-[11px] text-[#FF4500] hover:underline truncate max-w-[110px]">
+                                {lead.nome}
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs text-[#777] line-clamp-2">{inter.nota}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <EmptyState icon={CalendarClock} title="Selecione um dia" description="Clique em qualquer dia do calendário para ver tarefas e interações" />
+        )}
+      </div>
+
+      {/* Quick add task modal */}
+      {showTaskForm && (
+        <Modal isOpen onClose={() => setShowTaskForm(false)} title="Nova tarefa" size="sm">
+          <TaskFormModal
+            leads={leads}
+            initialDate={selectedDay ? format(selectedDay, 'yyyy-MM-dd') : undefined}
+            onAdd={(task) => { onAddTask(task); setShowTaskForm(false) }}
+            onClose={() => setShowTaskForm(false)}
+          />
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────
+// AI CHAT PANEL
+// ─────────────────────────────────────────────────────────
+
+function AIChatPanel({ isOpen, onClose, leads, tasks, interactions, config, onAction, toast }) {
+  const [apiMessages, setApiMessages]     = useState([])
+  const [displayMsgs, setDisplayMsgs]     = useState([])
+  const [input, setInput]                 = useState('')
+  const [loading, setLoading]             = useState(false)
+  const messagesEndRef                    = useRef(null)
+  const inputRef                          = useRef(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [displayMsgs, loading])
+
+  useEffect(() => {
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 150)
+  }, [isOpen])
+
+  const buildContext = () => ({
+    leads:        leads.map(l => ({ id: l.id, nome: l.nome, telefone: l.telefone, email: l.email, status: l.status, consumoMedio: l.consumoMedio, valorEstimado: l.valorEstimado, cidade: l.cidade, uf: l.uf, origem: l.origem, nomeIndicador: l.nomeIndicador, anotacoes: l.anotacoes, criadoEm: l.criadoEm, atualizadoEm: l.atualizadoEm })),
+    tasks:        tasks.map(t => ({ id: t.id, leadId: t.leadId, descricao: t.descricao, dataVencimento: t.dataVencimento, concluida: t.concluida })),
+    interactions: interactions.slice(0, 50).map(i => ({ id: i.id, leadId: i.leadId, data: i.data, canal: i.canal, nota: i.nota })),
+    config,
+  })
+
+  const toolLabel = (name) => ({
+    create_lead:       '✦ Lead criado',
+    update_lead:       '✦ Lead atualizado',
+    change_lead_stage: '✦ Etapa alterada',
+    delete_lead:       '✦ Lead removido',
+    create_task:       '✦ Tarefa criada',
+    complete_task:     '✦ Tarefa concluída',
+    delete_task:       '✦ Tarefa removida',
+    add_interaction:   '✦ Interação registrada',
+  }[name] || name)
+
+  const sendMessage = async (text) => {
+    const trimmed = text.trim()
+    if (!trimmed || loading) return
+
+    const userApiMsg = { role: 'user', content: trimmed }
+    let currentMsgs  = [...apiMessages, userApiMsg]
+
+    setApiMessages(currentMsgs)
+    setDisplayMsgs(prev => [...prev, { type: 'user', text: trimmed }])
+    setInput('')
+    setLoading(true)
+
+    try {
+      const toolsExecuted = []
+      let finalText = ''
+
+      while (true) {
+        const res  = await fetch('/api/chat', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ messages: currentMsgs, crmContext: buildContext() }),
+        })
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+          throw new Error(err.error || `Erro ${res.status}`)
+        }
+
+        const data = await res.json()
+
+        if (data.stop_reason === 'tool_use') {
+          const toolUses    = data.content.filter(b => b.type === 'tool_use')
+          const toolResults = []
+
+          for (const tool of toolUses) {
+            try {
+              const result = await onAction(tool.name, tool.input)
+              toolsExecuted.push({ name: tool.name, input: tool.input })
+              toolResults.push({ type: 'tool_result', tool_use_id: tool.id, content: JSON.stringify(result ?? { success: true }) })
+            } catch (e) {
+              toolResults.push({ type: 'tool_result', tool_use_id: tool.id, content: JSON.stringify({ error: e.message }), is_error: true })
+            }
+          }
+
+          currentMsgs = [
+            ...currentMsgs,
+            { role: 'assistant', content: data.content },
+            { role: 'user', content: toolResults },
+          ]
+        } else {
+          finalText   = data.content?.find?.(b => b.type === 'text')?.text || ''
+          currentMsgs = [...currentMsgs, { role: 'assistant', content: data.content }]
+          break
+        }
+      }
+
+      setApiMessages(currentMsgs)
+      setDisplayMsgs(prev => [...prev, { type: 'assistant', text: finalText, toolsUsed: toolsExecuted }])
+    } catch (err) {
+      setDisplayMsgs(prev => [...prev, { type: 'error', text: err.message }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const HINTS = [
+    'Quais leads estão sem contato há mais de 7 dias?',
+    'Cria tarefa: ligar para o João amanhã',
+    'Quantos leads fechei este mês?',
+    'Mostra os leads em negociação',
+  ]
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex pointer-events-none">
+      <div className="flex-1 pointer-events-auto" onClick={onClose} />
+      <div className="w-[420px] flex-shrink-0 bg-[#0A0A0A] border-l border-[#1A1A1A] flex flex-col pointer-events-auto shadow-2xl"
+        style={{ animation: 'slideInRight 0.22s cubic-bezier(0.16,1,0.3,1)' }}>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-[#1A1A1A]">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
+            <Sparkles size={15} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-sm text-white leading-tight">Matrix IA</p>
+            <p className="text-[11px] text-[#444]">Controle total do CRM</p>
+          </div>
+          {displayMsgs.length > 0 && (
+            <button onClick={() => { setApiMessages([]); setDisplayMsgs([]) }}
+              className="text-[11px] text-[#444] hover:text-[#888] transition-colors mr-1">
+              Limpar
+            </button>
+          )}
+          <button onClick={onClose} className="p-1.5 hover:bg-[#1C1C1C] rounded-lg text-[#444] hover:text-white transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {displayMsgs.length === 0 && (
+            <div className="py-6 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
+                <Sparkles size={28} className="text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-white text-sm">Olá, {config?.nomeConsultor || 'Consultor'}!</p>
+                <p className="text-xs text-[#444] mt-1.5 leading-relaxed">
+                  Sou seu assistente com acesso total ao CRM.<br />Posso criar, editar e analisar qualquer dado.
+                </p>
+              </div>
+              <div className="space-y-1.5 pt-1 text-left">
+                {HINTS.map(hint => (
+                  <button key={hint} onClick={() => sendMessage(hint)}
+                    className="w-full text-left text-xs px-3.5 py-2.5 rounded-xl bg-[#141414] border border-[#1E1E1E] text-[#777] hover:text-white hover:border-[#FF4500]/30 hover:bg-[#FF4500]/5 transition-all">
+                    {hint}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {displayMsgs.map((msg, idx) => (
+            <div key={idx}>
+              {msg.type === 'user' && (
+                <div className="flex justify-end">
+                  <div className="max-w-[82%] px-4 py-2.5 rounded-2xl rounded-tr-md text-sm text-white"
+                    style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
+                    {msg.text}
+                  </div>
+                </div>
+              )}
+
+              {msg.type === 'assistant' && (
+                <div className="space-y-2">
+                  {msg.toolsUsed?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pl-9">
+                      {msg.toolsUsed.map((t, i) => (
+                        <span key={i} className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/20">
+                          {toolLabel(t.name)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center mt-0.5"
+                      style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
+                      <Sparkles size={11} className="text-white" />
+                    </div>
+                    <div className="flex-1 bg-[#141414] border border-[#1E1E1E] rounded-2xl rounded-tl-md px-4 py-3 text-sm text-[#CCC] whitespace-pre-wrap leading-relaxed">
+                      {msg.text || <span className="text-[#444] italic">Ação executada.</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {msg.type === 'error' && (
+                <div className="flex items-start gap-2.5">
+                  <div className="w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center mt-0.5 bg-red-500/20">
+                    <AlertCircle size={11} className="text-red-400" />
+                  </div>
+                  <div className="flex-1 bg-red-500/10 border border-red-500/20 rounded-2xl rounded-tl-md px-4 py-3 text-sm text-red-400 leading-relaxed">
+                    {msg.text}
+                    {msg.text?.includes('ANTHROPIC_API_KEY') && (
+                      <p className="mt-2 text-xs text-red-400/70">Adicione ANTHROPIC_API_KEY nas variáveis de ambiente do Vercel.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
+                <Sparkles size={11} className="text-white" />
+              </div>
+              <div className="bg-[#141414] border border-[#1E1E1E] rounded-2xl rounded-tl-md px-4 py-3.5">
+                <div className="flex gap-1.5 items-center">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-[#FF4500]/60"
+                      style={{ animation: 'bounce 1s infinite', animationDelay: `${i * 0.18}s` }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="p-4 border-t border-[#1A1A1A]">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px' }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }}
+              placeholder="Pergunte ou peça uma ação..."
+              rows={1}
+              className="flex-1 resize-none bg-[#141414] border border-[#1E1E1E] rounded-xl px-4 py-3 text-sm text-white placeholder-[#444] focus:outline-none focus:border-[#FF4500]/50 transition-colors overflow-hidden"
+              style={{ minHeight: '44px', maxHeight: '120px' }}
+            />
+            <button onClick={() => sendMessage(input)} disabled={!input.trim() || loading}
+              className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center disabled:opacity-30 transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
+              <Send size={15} className="text-white" />
+            </button>
+          </div>
+          <p className="text-[10px] text-[#333] mt-2 text-center">Enter para enviar · Shift+Enter nova linha</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────
 // APP
 // ─────────────────────────────────────────────────────────
 
@@ -1938,6 +2484,7 @@ export default function App() {
   const [editingLead, setEditingLead]     = useState(null)
   const [paletteOpen, setPaletteOpen]     = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [chatOpen, setChatOpen]           = useState(false)
 
   const toast = useToast()
 
@@ -2024,6 +2571,19 @@ export default function App() {
     }
   }
 
+  const handleUpdateNote = async (leadId, anotacoes) => {
+    const lead = leads.find(l => l.id === leadId)
+    if (!lead) return
+    const updated = { ...lead, anotacoes, atualizadoEm: new Date().toISOString() }
+    setLeads(prev => prev.map(l => l.id === leadId ? updated : l))
+    if (selectedLead?.id === leadId) setSelectedLead(updated)
+    try {
+      await db.leads.update(updated)
+    } catch {
+      toast.error('Erro ao salvar anotação.')
+    }
+  }
+
   const handleStageChange = async (leadId, newStage, motivo = '') => {
     const now = new Date().toISOString()
     const stage = getStage(newStage)
@@ -2031,6 +2591,7 @@ export default function App() {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
     if (selectedLead?.id === leadId) setSelectedLead(prev => ({ ...prev, ...updated }))
     if (newStage === 'fechado_ganho') toast.success('🎉 Contrato fechado! Parabéns!')
+    else if (newStage === 'cobrar_comprovante') toast.info('📋 Aguardando comprovante de pagamento')
     else toast.info(`Movido para ${stage.label}`)
     try {
       const lead = leads.find(l => l.id === leadId)
@@ -2111,6 +2672,84 @@ export default function App() {
     }
   }
 
+  const handleAIAction = async (toolName, input) => {
+    const now = new Date().toISOString()
+    switch (toolName) {
+      case 'create_lead': {
+        const lead = {
+          id: uid(), nome: input.nome, telefone: input.telefone || '',
+          email: input.email || '', cidade: input.cidade || '', uf: input.uf || '',
+          distribuidora: input.distribuidora || '', consumoMedio: input.consumoMedio ?? null,
+          valorEstimado: input.valorEstimado ?? null, origem: input.origem || '',
+          nomeIndicador: input.nomeIndicador || '', status: input.status || 'novo_contato',
+          motivoPerda: '', contaLuzRecebida: false, linkDocumento: '',
+          anotacoes: input.anotacoes || '', criadoEm: now, atualizadoEm: now,
+        }
+        await db.leads.insert(lead)
+        setLeads(prev => [lead, ...prev])
+        toast.success(`Lead "${lead.nome}" criado!`)
+        return { success: true, id: lead.id }
+      }
+      case 'update_lead': {
+        const existing = leads.find(l => l.id === input.id)
+        if (!existing) return { error: `Lead ID ${input.id} não encontrado` }
+        const updated = { ...existing, ...input, atualizadoEm: now }
+        await db.leads.update(updated)
+        setLeads(prev => prev.map(l => l.id === input.id ? updated : l))
+        toast.success(`Lead "${updated.nome}" atualizado!`)
+        return { success: true }
+      }
+      case 'change_lead_stage': {
+        await handleStageChange(input.id, input.status, input.motivoPerda || '')
+        return { success: true }
+      }
+      case 'delete_lead': {
+        const lead = leads.find(l => l.id === input.id)
+        if (!lead) return { error: `Lead ID ${input.id} não encontrado` }
+        await db.leads.remove(input.id)
+        setLeads(prev => prev.filter(l => l.id !== input.id))
+        setInteractions(prev => prev.filter(i => i.leadId !== input.id))
+        setTasks(prev => prev.filter(t => t.leadId !== input.id))
+        toast.info(`Lead "${lead.nome}" removido.`)
+        return { success: true }
+      }
+      case 'create_task': {
+        const task = {
+          id: uid(), leadId: input.leadId || null, descricao: input.descricao,
+          dataVencimento: new Date(input.dataVencimento + 'T23:59:00').toISOString(),
+          concluida: false, criadaEm: now,
+        }
+        await db.tasks.insert(task)
+        setTasks(prev => [...prev, task])
+        toast.success('Tarefa criada!')
+        return { success: true, id: task.id }
+      }
+      case 'complete_task': {
+        const task = tasks.find(t => t.id === input.id)
+        if (!task) return { error: `Tarefa ID ${input.id} não encontrada` }
+        const updatedTask = { ...task, concluida: true }
+        await db.tasks.update(updatedTask)
+        setTasks(prev => prev.map(t => t.id === input.id ? updatedTask : t))
+        toast.success('Tarefa concluída!')
+        return { success: true }
+      }
+      case 'delete_task': {
+        await db.tasks.remove(input.id)
+        setTasks(prev => prev.filter(t => t.id !== input.id))
+        return { success: true }
+      }
+      case 'add_interaction': {
+        const interaction = { id: uid(), leadId: input.leadId, data: now, canal: input.canal, nota: input.nota }
+        await db.interactions.insert(interaction)
+        setInteractions(prev => [interaction, ...prev])
+        toast.success('Interação registrada!')
+        return { success: true, id: interaction.id }
+      }
+      default:
+        return { error: `Ferramenta "${toolName}" desconhecida` }
+    }
+  }
+
   if (loading) return (
     <div className="flex h-screen bg-[#0A0A0A] items-center justify-center gap-3">
       <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)' }}>
@@ -2176,6 +2815,11 @@ export default function App() {
             <TasksView leads={leads} tasks={tasks} onLeadClick={handleLeadClick}
               onCompleteTask={handleCompleteTask} onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
           )}
+          {view === 'agenda' && (
+            <AgendaView leads={leads} tasks={tasks} interactions={interactions}
+              onLeadClick={handleLeadClick} onCompleteTask={handleCompleteTask}
+              onDeleteTask={handleDeleteTask} onAddTask={handleAddTask} />
+          )}
           {view === 'configuracoes' && (
             <SettingsView config={config} onConfig={handleConfig}
               leads={leads} interactions={interactions} tasks={tasks}
@@ -2221,6 +2865,7 @@ export default function App() {
             config={config} toast={toast}
             onClose={() => setSelectedLead(null)}
             onEdit={handleEditLead} onDelete={handleDeleteLead}
+            onUpdateNote={handleUpdateNote}
             onAddInteraction={handleAddInteraction} onAddTask={handleAddTask}
             onCompleteTask={handleCompleteTask} onDeleteTask={handleDeleteTask}
             onStageChange={handleStageChange}
@@ -2234,6 +2879,28 @@ export default function App() {
         <LeadForm lead={editingLead} onSave={handleSaveLead}
           onClose={() => { setShowForm(false); setEditingLead(null) }} />
       </Modal>
+
+      {/* AI Chat floating button */}
+      {!chatOpen && (
+        <button onClick={() => setChatOpen(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl z-40 transition-all hover:scale-105 hover:brightness-110"
+          style={{ background: 'linear-gradient(135deg, #FF4500 0%, #FF6A35 100%)', boxShadow: '0 0 24px rgba(255,69,0,0.35)' }}
+          title="Matrix IA">
+          <Sparkles size={22} className="text-white" />
+        </button>
+      )}
+
+      {/* AI Chat Panel */}
+      <AIChatPanel
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        leads={leads}
+        tasks={tasks}
+        interactions={interactions}
+        config={config}
+        onAction={handleAIAction}
+        toast={toast}
+      />
 
       {/* Toasts */}
       <ToastContainer toasts={toast.toasts} />
