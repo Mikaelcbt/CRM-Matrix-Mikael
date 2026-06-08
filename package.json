@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.107.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.462.0",
+    "openai": "^6.42.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

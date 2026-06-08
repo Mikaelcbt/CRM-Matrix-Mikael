@@ -1,168 +1,147 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import OpenAI from 'openai'
 
-// ── Tool definitions ──────────────────────────────────────
+// ── Tool definitions (OpenAI format) ──────────────────────
 
-const FUNCTION_DECLARATIONS = [
+const TOOLS = [
   {
-    name: 'create_lead',
-    description: 'Cria um novo lead no CRM com os dados fornecidos.',
-    parameters: {
-      type: 'object',
-      properties: {
-        nome:          { type: 'string',  description: 'Nome completo do lead' },
-        telefone:      { type: 'string',  description: 'Telefone com DDD, ex: 71999990000' },
-        email:         { type: 'string' },
-        cidade:        { type: 'string' },
-        uf:            { type: 'string',  description: 'Sigla do estado, ex: SP, RJ, BA' },
-        distribuidora: { type: 'string' },
-        consumoMedio:  { type: 'number',  description: 'Consumo médio em kWh/mês' },
-        valorEstimado: { type: 'number',  description: 'Valor estimado em R$/mês' },
-        origem:        { type: 'string',  description: 'indicacao | instagram | abordagem | evento' },
-        nomeIndicador: { type: 'string' },
-        status:        { type: 'string',  description: 'Etapa inicial do pipeline. Padrão: novo_contato' },
-        anotacoes:     { type: 'string' },
+    type: 'function',
+    function: {
+      name: 'create_lead',
+      description: 'Cria um novo lead no CRM com os dados fornecidos.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome:          { type: 'string',  description: 'Nome completo do lead' },
+          telefone:      { type: 'string',  description: 'Telefone com DDD, ex: 71999990000' },
+          email:         { type: 'string' },
+          cidade:        { type: 'string' },
+          uf:            { type: 'string',  description: 'Sigla do estado, ex: SP, RJ, BA' },
+          distribuidora: { type: 'string' },
+          consumoMedio:  { type: 'number',  description: 'Consumo médio em kWh/mês' },
+          valorEstimado: { type: 'number',  description: 'Valor estimado em R$/mês' },
+          origem:        { type: 'string',  description: 'indicacao | instagram | abordagem | evento' },
+          nomeIndicador: { type: 'string' },
+          status:        { type: 'string',  description: 'Etapa inicial. Padrão: novo_contato' },
+          anotacoes:     { type: 'string' },
+        },
+        required: ['nome', 'telefone'],
       },
-      required: ['nome', 'telefone'],
     },
   },
   {
-    name: 'update_lead',
-    description: 'Atualiza campos específicos de um lead existente.',
-    parameters: {
-      type: 'object',
-      properties: {
-        id:               { type: 'string', description: 'ID do lead (obrigatório)' },
-        nome:             { type: 'string' },
-        telefone:         { type: 'string' },
-        email:            { type: 'string' },
-        cidade:           { type: 'string' },
-        uf:               { type: 'string' },
-        distribuidora:    { type: 'string' },
-        consumoMedio:     { type: 'number' },
-        valorEstimado:    { type: 'number' },
-        origem:           { type: 'string' },
-        nomeIndicador:    { type: 'string' },
-        anotacoes:        { type: 'string' },
-        contaLuzRecebida: { type: 'boolean' },
-        linkDocumento:    { type: 'string' },
+    type: 'function',
+    function: {
+      name: 'update_lead',
+      description: 'Atualiza campos específicos de um lead existente.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id:               { type: 'string', description: 'ID do lead (obrigatório)' },
+          nome:             { type: 'string' },
+          telefone:         { type: 'string' },
+          email:            { type: 'string' },
+          cidade:           { type: 'string' },
+          uf:               { type: 'string' },
+          distribuidora:    { type: 'string' },
+          consumoMedio:     { type: 'number' },
+          valorEstimado:    { type: 'number' },
+          origem:           { type: 'string' },
+          nomeIndicador:    { type: 'string' },
+          anotacoes:        { type: 'string' },
+          contaLuzRecebida: { type: 'boolean' },
+          linkDocumento:    { type: 'string' },
+        },
+        required: ['id'],
       },
-      required: ['id'],
     },
   },
   {
-    name: 'change_lead_stage',
-    description: 'Muda a etapa do pipeline de um lead.',
-    parameters: {
-      type: 'object',
-      properties: {
-        id:          { type: 'string' },
-        status:      { type: 'string', description: 'novo_contato | primeiro_contato | aguardando_conta | conta_recebida | proposta_enviada | em_negociacao | fechado_ganho | cobrar_comprovante | fechado_perdido' },
-        motivoPerda: { type: 'string', description: 'Obrigatório quando status = fechado_perdido' },
+    type: 'function',
+    function: {
+      name: 'change_lead_stage',
+      description: 'Muda a etapa do pipeline de um lead.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id:          { type: 'string' },
+          status:      { type: 'string', description: 'novo_contato | primeiro_contato | aguardando_conta | conta_recebida | proposta_enviada | em_negociacao | fechado_ganho | cobrar_comprovante | fechado_perdido' },
+          motivoPerda: { type: 'string', description: 'Obrigatório quando status = fechado_perdido' },
+        },
+        required: ['id', 'status'],
       },
-      required: ['id', 'status'],
     },
   },
   {
-    name: 'delete_lead',
-    description: 'Remove permanentemente um lead do CRM.',
-    parameters: {
-      type: 'object',
-      properties: { id: { type: 'string' } },
-      required: ['id'],
-    },
-  },
-  {
-    name: 'create_task',
-    description: 'Cria uma nova tarefa, opcionalmente vinculada a um lead.',
-    parameters: {
-      type: 'object',
-      properties: {
-        descricao:      { type: 'string', description: 'Descrição da tarefa' },
-        dataVencimento: { type: 'string', description: 'Data formato YYYY-MM-DD' },
-        leadId:         { type: 'string', description: 'ID do lead (opcional)' },
+    type: 'function',
+    function: {
+      name: 'delete_lead',
+      description: 'Remove permanentemente um lead do CRM.',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
       },
-      required: ['descricao', 'dataVencimento'],
     },
   },
   {
-    name: 'complete_task',
-    description: 'Marca uma tarefa como concluída.',
-    parameters: {
-      type: 'object',
-      properties: { id: { type: 'string' } },
-      required: ['id'],
-    },
-  },
-  {
-    name: 'delete_task',
-    description: 'Remove uma tarefa.',
-    parameters: {
-      type: 'object',
-      properties: { id: { type: 'string' } },
-      required: ['id'],
-    },
-  },
-  {
-    name: 'add_interaction',
-    description: 'Registra uma interação/contato com um lead.',
-    parameters: {
-      type: 'object',
-      properties: {
-        leadId: { type: 'string' },
-        canal:  { type: 'string', description: 'whatsapp | ligacao | email | instagram' },
-        nota:   { type: 'string', description: 'O que foi conversado ou feito' },
+    type: 'function',
+    function: {
+      name: 'create_task',
+      description: 'Cria uma nova tarefa, opcionalmente vinculada a um lead.',
+      parameters: {
+        type: 'object',
+        properties: {
+          descricao:      { type: 'string', description: 'Descrição da tarefa' },
+          dataVencimento: { type: 'string', description: 'Data formato YYYY-MM-DD' },
+          leadId:         { type: 'string', description: 'ID do lead (opcional)' },
+        },
+        required: ['descricao', 'dataVencimento'],
       },
-      required: ['leadId', 'canal', 'nota'],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'complete_task',
+      description: 'Marca uma tarefa como concluída.',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_task',
+      description: 'Remove uma tarefa.',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_interaction',
+      description: 'Registra uma interação/contato com um lead.',
+      parameters: {
+        type: 'object',
+        properties: {
+          leadId: { type: 'string' },
+          canal:  { type: 'string', description: 'whatsapp | ligacao | email | instagram' },
+          nota:   { type: 'string', description: 'O que foi conversado ou feito' },
+        },
+        required: ['leadId', 'canal', 'nota'],
+      },
     },
   },
 ]
 
 // ── Helpers ───────────────────────────────────────────────
-
-function toGeminiContents(messages) {
-  const result = []
-  let i = 0
-
-  while (i < messages.length) {
-    const msg = messages[i]
-
-    if (msg.role === 'user') {
-      result.push({ role: 'user', parts: [{ text: msg.content || '' }] })
-      i++
-    } else if (msg.role === 'assistant') {
-      if (msg.toolCalls?.length) {
-        result.push({
-          role: 'model',
-          parts: msg.toolCalls.map(tc => ({
-            functionCall: { name: tc.name, args: tc.args || {} },
-          })),
-        })
-      } else {
-        result.push({ role: 'model', parts: [{ text: msg.content || '' }] })
-      }
-      i++
-    } else if (msg.role === 'tool') {
-      // Group consecutive tool results into a single user turn
-      const parts = []
-      while (i < messages.length && messages[i].role === 'tool') {
-        let responseData
-        try { responseData = JSON.parse(messages[i].content) } catch { responseData = { result: messages[i].content } }
-        parts.push({
-          functionResponse: {
-            name: messages[i].toolName,
-            response: responseData,
-          },
-        })
-        i++
-      }
-      result.push({ role: 'user', parts })
-    } else {
-      i++
-    }
-  }
-
-  return result
-}
 
 function buildSystemPrompt(crmContext) {
   const leads        = crmContext?.leads        || []
@@ -214,48 +193,80 @@ REGRAS:
 - Responda SEMPRE em português brasileiro.`
 }
 
+function toOpenAIMessages(messages, systemPrompt) {
+  const result = [{ role: 'system', content: systemPrompt }]
+
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      result.push({ role: 'user', content: msg.content || '' })
+    } else if (msg.role === 'assistant') {
+      if (msg.toolCalls?.length) {
+        result.push({
+          role: 'assistant',
+          content: null,
+          tool_calls: msg.toolCalls.map(tc => ({
+            id:       tc.id,
+            type:     'function',
+            function: { name: tc.name, arguments: JSON.stringify(tc.args || {}) },
+          })),
+        })
+      } else {
+        result.push({ role: 'assistant', content: msg.content || '' })
+      }
+    } else if (msg.role === 'tool') {
+      result.push({
+        role:         'tool',
+        tool_call_id: msg.toolCallId,
+        content:      msg.content || '',
+      })
+    }
+  }
+
+  return result
+}
+
 // ── Handler ───────────────────────────────────────────────
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const apiKey = process.env.GEMINI_API_KEY ?? 'AQ.Ab8RN6IQftmO9bvPEfO3B3-F9YkIM1YBQYa4seczYB3Fou8_WQ'
+  const apiKey = process.env.NVIDIA_API_KEY ?? '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'
 
   const { messages, crmContext } = req.body
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages inválido' })
 
   try {
-    const genAI    = new GoogleGenerativeAI(apiKey)
-    const model    = genAI.getGenerativeModel({
-      model:             'gemini-2.0-flash',
-      systemInstruction: buildSystemPrompt(crmContext),
-      tools:             [{ functionDeclarations: FUNCTION_DECLARATIONS }],
-      toolConfig:        { functionCallingConfig: { mode: 'AUTO' } },
+    const client = new OpenAI({
+      apiKey,
+      baseURL: 'https://integrate.api.nvidia.com/v1',
     })
 
-    const contents  = toGeminiContents(messages)
-    const result    = await model.generateContent({ contents })
-    const candidate = result.response.candidates[0]
-    const parts     = candidate.content.parts
+    const openaiMessages = toOpenAIMessages(messages, buildSystemPrompt(crmContext))
 
-    // Function calls
-    const funcCalls = parts.filter(p => p.functionCall)
-    if (funcCalls.length > 0) {
+    const response = await client.chat.completions.create({
+      model:      'meta/llama-3.3-70b-instruct',
+      messages:   openaiMessages,
+      tools:      TOOLS,
+      tool_choice: 'auto',
+      max_tokens: 1024,
+    })
+
+    const message = response.choices[0].message
+
+    if (message.tool_calls?.length) {
       return res.json({
         type:      'tool_calls',
-        toolCalls: funcCalls.map((p, i) => ({
-          id:   `tc_${Date.now()}_${i}`,
-          name: p.functionCall.name,
-          args: p.functionCall.args || {},
+        toolCalls: message.tool_calls.map(tc => ({
+          id:   tc.id,
+          name: tc.function.name,
+          args: JSON.parse(tc.function.arguments || '{}'),
         })),
       })
     }
 
-    // Text response
-    const text = parts.filter(p => p.text).map(p => p.text).join('')
-    return res.json({ type: 'done', text })
+    return res.json({ type: 'done', text: message.content || '' })
   } catch (err) {
-    console.error('[chat] Gemini error:', err.message)
-    return res.status(500).json({ error: err.message || 'Erro ao chamar Gemini API' })
+    console.error('[chat] NVIDIA NIM error:', err.message)
+    return res.status(500).json({ error: err.message || 'Erro ao chamar NVIDIA NIM API' })
   }
 }
