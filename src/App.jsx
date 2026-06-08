@@ -84,84 +84,8 @@ const waTemplates = (nome, consultor) => ({
 })
 
 // ─────────────────────────────────────────────────────────
-// SAMPLE DATA
-// ─────────────────────────────────────────────────────────
-
-const d = (n) => new Date(Date.now() - n * 86400000).toISOString()
-const df = (n) => new Date(Date.now() + n * 86400000).toISOString()
-
-const INITIAL_LEADS = [
-  { id: 'l1', nome: 'João Carlos Silva', telefone: '(71) 99876-5432', email: 'joao.silva@gmail.com', cidade: 'Salvador', uf: 'BA', distribuidora: 'Neoenergia Coelba (BA)', consumoMedio: 850, valorEstimado: 950, origem: 'indicacao', nomeIndicador: 'Pedro Alves', status: 'em_negociacao', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo', criadoEm: d(18), atualizadoEm: d(2) },
-  { id: 'l2', nome: 'Maria Fernanda Oliveira', telefone: '(11) 98765-4321', email: 'mf.oliveira@hotmail.com', cidade: 'São Paulo', uf: 'SP', distribuidora: 'Enel São Paulo', consumoMedio: 1200, valorEstimado: 1450, origem: 'instagram', nomeIndicador: '', status: 'proposta_enviada', motivoPerda: '', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(12), atualizadoEm: d(1) },
-  { id: 'l3', nome: 'Carlos Eduardo Santos', telefone: '(21) 97654-3210', email: 'carlos.santos@gmail.com', cidade: 'Rio de Janeiro', uf: 'RJ', distribuidora: 'Light (RJ)', consumoMedio: 720, valorEstimado: 900, origem: 'abordagem', nomeIndicador: '', status: 'fechado_ganho', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo2', criadoEm: d(35), atualizadoEm: d(5) },
-  { id: 'l4', nome: 'Ana Paula Costa', telefone: '(31) 96543-2109', email: 'ana.costa@empresa.com', cidade: 'Belo Horizonte', uf: 'MG', distribuidora: 'Cemig (MG)', consumoMedio: 1500, valorEstimado: 1800, origem: 'indicacao', nomeIndicador: 'Marcos Vieira', status: 'conta_recebida', motivoPerda: '', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(8), atualizadoEm: d(0) },
-  { id: 'l5', nome: 'Roberto Lima', telefone: '(85) 95432-1098', email: '', cidade: 'Fortaleza', uf: 'CE', distribuidora: 'Enel Ceará', consumoMedio: null, valorEstimado: null, origem: 'evento', nomeIndicador: '', status: 'novo_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(1), atualizadoEm: d(0) },
-  { id: 'l6', nome: 'Fernanda Souza', telefone: '(41) 94321-0987', email: 'fernanda.souza@gmail.com', cidade: 'Curitiba', uf: 'PR', distribuidora: 'COPEL (PR)', consumoMedio: 680, valorEstimado: null, origem: 'instagram', nomeIndicador: '', status: 'primeiro_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(4), atualizadoEm: d(1) },
-  { id: 'l7', nome: 'Paulo Henrique Mendes', telefone: '(81) 93210-9876', email: 'paulo.mendes@outlook.com', cidade: 'Recife', uf: 'PE', distribuidora: 'Neoenergia Pernambuco (PE)', consumoMedio: 930, valorEstimado: null, origem: 'indicacao', nomeIndicador: 'João Silva', status: 'aguardando_conta', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(6), atualizadoEm: d(2) },
-  { id: 'l8', nome: 'Luciana Ferreira', telefone: '(51) 92109-8765', email: 'lu.ferreira@gmail.com', cidade: 'Porto Alegre', uf: 'RS', distribuidora: 'CEEE (RS)', consumoMedio: 450, valorEstimado: null, origem: 'abordagem', nomeIndicador: '', status: 'fechado_perdido', motivoPerda: 'Consumo abaixo do mínimo', contaLuzRecebida: true, linkDocumento: '', criadoEm: d(25), atualizadoEm: d(10) },
-  { id: 'l9', nome: 'Marcos Alves', telefone: '(48) 91098-7654', email: 'marcos.alves@hotmail.com', cidade: 'Florianópolis', uf: 'SC', distribuidora: 'Celesc (SC)', consumoMedio: 1100, valorEstimado: null, origem: 'indicacao', nomeIndicador: 'Ana Costa', status: 'aguardando_conta', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(9), atualizadoEm: d(3) },
-  { id: 'l10', nome: 'Juliana Reis', telefone: '(62) 90987-6543', email: 'ju.reis@empresa.com', cidade: 'Goiânia', uf: 'GO', distribuidora: 'Equatorial Goiás', consumoMedio: 800, valorEstimado: 1050, origem: 'instagram', nomeIndicador: '', status: 'em_negociacao', motivoPerda: '', contaLuzRecebida: true, linkDocumento: 'https://drive.google.com/exemplo3', criadoEm: d(14), atualizadoEm: d(1) },
-  { id: 'l11', nome: 'Diego Carvalho', telefone: '(92) 99876-1234', email: 'diego.c@gmail.com', cidade: 'Manaus', uf: 'AM', distribuidora: 'Outro', consumoMedio: 2200, valorEstimado: 2800, origem: 'evento', nomeIndicador: '', status: 'primeiro_contato', motivoPerda: '', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(3), atualizadoEm: d(0) },
-  { id: 'l12', nome: 'Patricia Nunes', telefone: '(79) 98765-9876', email: 'patricia.n@outlook.com', cidade: 'Aracaju', uf: 'SE', distribuidora: 'Energisa Sergipe', consumoMedio: 760, valorEstimado: null, origem: 'indicacao', nomeIndicador: 'Roberto Lima', status: 'fechado_perdido', motivoPerda: 'Sem retorno', contaLuzRecebida: false, linkDocumento: '', criadoEm: d(20), atualizadoEm: d(8) },
-]
-
-const INITIAL_INTERACTIONS = [
-  { id: 'i1', leadId: 'l1', data: d(17), canal: 'whatsapp', nota: 'Primeiro contato. Cliente interessado, vai procurar a conta de luz.' },
-  { id: 'i2', leadId: 'l1', data: d(10), canal: 'ligacao',  nota: 'Ligação realizada. Enviou a conta por WhatsApp. Consumo médio de 850 kWh.' },
-  { id: 'i3', leadId: 'l1', data: d(2),  canal: 'whatsapp', nota: 'Proposta enviada com projeção de 15% de desconto. Aguardando retorno.' },
-  { id: 'i4', leadId: 'l2', data: d(11), canal: 'instagram', nota: 'Cliente mandou DM perguntando sobre o desconto. Passei o WhatsApp.' },
-  { id: 'i5', leadId: 'l2', data: d(8),  canal: 'whatsapp', nota: 'Conta de luz recebida. Consumo de 1.200 kWh. Proposta de 18% de desconto preparada.' },
-  { id: 'i6', leadId: 'l2', data: d(1),  canal: 'whatsapp', nota: 'Proposta enviada. Cliente vai analisar até sexta.' },
-  { id: 'i7', leadId: 'l3', data: d(34), canal: 'whatsapp', nota: 'Abordagem direta no evento de networking. Deu o contato.' },
-  { id: 'i8', leadId: 'l3', data: d(28), canal: 'ligacao',  nota: 'Apresentei a proposta por telefone. Muito receptivo.' },
-  { id: 'i9', leadId: 'l3', data: d(5),  canal: 'whatsapp', nota: 'Contrato assinado! Cliente vai economizar R$180/mês.' },
-  { id: 'i10', leadId: 'l4', data: d(7), canal: 'whatsapp', nota: 'Primeiro contato. Consumo alto — ótimo perfil. Pediu a conta de luz.' },
-  { id: 'i11', leadId: 'l4', data: d(1), canal: 'whatsapp', nota: 'Conta recebida. Consumo de 1.500 kWh. Vou elaborar proposta.' },
-  { id: 'i12', leadId: 'l6', data: d(3), canal: 'whatsapp', nota: 'Respondeu no Instagram. Encaminhei para WhatsApp. Explicou situação.' },
-  { id: 'i13', leadId: 'l7', data: d(5), canal: 'whatsapp', nota: 'Indicado pelo João Silva. Ótimo perfil, 930 kWh. Pediu 3 dias para mandar a conta.' },
-  { id: 'i14', leadId: 'l9', data: d(8), canal: 'ligacao',  nota: 'Ligação inicial. Muito interessado. Vai solicitar a conta ao proprietário.' },
-  { id: 'i15', leadId: 'l10', data: d(13), canal: 'whatsapp', nota: 'Conta recebida. Proposta enviada com 14% de desconto.' },
-  { id: 'i16', leadId: 'l10', data: d(1), canal: 'email',   nota: 'Follow-up por e-mail. Questionou sobre multa contratual.' },
-]
-
-const INITIAL_TASKS = [
-  { id: 't1', leadId: 'l1', descricao: 'Ligar para confirmar proposta', dataVencimento: df(1), concluida: false, criadaEm: d(2) },
-  { id: 't2', leadId: 'l2', descricao: 'Aguardar resposta até sexta e fazer follow-up', dataVencimento: df(2), concluida: false, criadaEm: d(1) },
-  { id: 't3', leadId: 'l4', descricao: 'Elaborar e enviar proposta', dataVencimento: df(0), concluida: false, criadaEm: d(0) },
-  { id: 't4', leadId: 'l5', descricao: 'Ligar para primeiro contato', dataVencimento: df(0), concluida: false, criadaEm: d(1) },
-  { id: 't5', leadId: 'l6', descricao: 'Solicitar conta de luz por WhatsApp', dataVencimento: df(1), concluida: false, criadaEm: d(1) },
-  { id: 't6', leadId: 'l7', descricao: 'Follow-up — cliente ia enviar conta hoje', dataVencimento: d(0), concluida: false, criadaEm: d(5) },
-  { id: 't7', leadId: 'l9', descricao: 'Ligar para cobrar conta de luz', dataVencimento: d(1), concluida: false, criadaEm: d(3) },
-  { id: 't8', leadId: 'l10', descricao: 'Responder dúvida sobre cláusula contratual', dataVencimento: df(0), concluida: false, criadaEm: d(1) },
-  { id: 't9', leadId: 'l11', descricao: 'Enviar material explicativo sobre o mercado livre', dataVencimento: df(3), concluida: false, criadaEm: d(0) },
-  { id: 't10', leadId: 'l3', descricao: 'Enviar contrato assinado para o setor', dataVencimento: d(4), concluida: true, criadaEm: d(5) },
-]
-
-// ─────────────────────────────────────────────────────────
 // HOOKS & UTILITIES
 // ─────────────────────────────────────────────────────────
-
-function useLocalStorage(key, initialValue) {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = window.localStorage.getItem(key)
-      return item ? JSON.parse(item) : initialValue
-    } catch { return initialValue }
-  })
-  const setValue = useCallback((value) => {
-    setStoredValue(prev => {
-      try {
-        const v = typeof value === 'function' ? value(prev) : value
-        window.localStorage.setItem(key, JSON.stringify(v))
-        return v
-      } catch (e) {
-        console.error('localStorage write failed:', e)
-        return prev
-      }
-    })
-  }, [key])
-  return [storedValue, setValue]
-}
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 
