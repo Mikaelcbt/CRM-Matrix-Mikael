@@ -1,23 +1,25 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const TOOLS = [
+// ── Tool definitions ──────────────────────────────────────
+
+const FUNCTION_DECLARATIONS = [
   {
     name: 'create_lead',
     description: 'Cria um novo lead no CRM com os dados fornecidos.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: {
         nome:          { type: 'string',  description: 'Nome completo do lead' },
-        telefone:      { type: 'string',  description: 'Telefone com DDD' },
+        telefone:      { type: 'string',  description: 'Telefone com DDD, ex: 71999990000' },
         email:         { type: 'string' },
         cidade:        { type: 'string' },
-        uf:            { type: 'string',  description: 'Sigla do estado, ex: SP, RJ' },
+        uf:            { type: 'string',  description: 'Sigla do estado, ex: SP, RJ, BA' },
         distribuidora: { type: 'string' },
         consumoMedio:  { type: 'number',  description: 'Consumo médio em kWh/mês' },
         valorEstimado: { type: 'number',  description: 'Valor estimado em R$/mês' },
-        origem:        { type: 'string',  enum: ['indicacao', 'instagram', 'abordagem', 'evento'] },
+        origem:        { type: 'string',  description: 'indicacao | instagram | abordagem | evento' },
         nomeIndicador: { type: 'string' },
-        status:        { type: 'string',  description: 'Etapa inicial. Padrão: novo_contato' },
+        status:        { type: 'string',  description: 'Etapa inicial do pipeline. Padrão: novo_contato' },
         anotacoes:     { type: 'string' },
       },
       required: ['nome', 'telefone'],
@@ -26,10 +28,10 @@ const TOOLS = [
   {
     name: 'update_lead',
     description: 'Atualiza campos específicos de um lead existente.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: {
-        id:               { type: 'string' },
+        id:               { type: 'string', description: 'ID do lead (obrigatório)' },
         nome:             { type: 'string' },
         telefone:         { type: 'string' },
         email:            { type: 'string' },
@@ -50,12 +52,12 @@ const TOOLS = [
   {
     name: 'change_lead_stage',
     description: 'Muda a etapa do pipeline de um lead.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: {
         id:          { type: 'string' },
-        status:      { type: 'string', enum: ['novo_contato','primeiro_contato','aguardando_conta','conta_recebida','proposta_enviada','em_negociacao','fechado_ganho','cobrar_comprovante','fechado_perdido'] },
-        motivoPerda: { type: 'string', description: 'Obrigatório se status = fechado_perdido' },
+        status:      { type: 'string', description: 'novo_contato | primeiro_contato | aguardando_conta | conta_recebida | proposta_enviada | em_negociacao | fechado_ganho | cobrar_comprovante | fechado_perdido' },
+        motivoPerda: { type: 'string', description: 'Obrigatório quando status = fechado_perdido' },
       },
       required: ['id', 'status'],
     },
@@ -63,7 +65,7 @@ const TOOLS = [
   {
     name: 'delete_lead',
     description: 'Remove permanentemente um lead do CRM.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string' } },
       required: ['id'],
@@ -72,7 +74,7 @@ const TOOLS = [
   {
     name: 'create_task',
     description: 'Cria uma nova tarefa, opcionalmente vinculada a um lead.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: {
         descricao:      { type: 'string', description: 'Descrição da tarefa' },
@@ -85,7 +87,7 @@ const TOOLS = [
   {
     name: 'complete_task',
     description: 'Marca uma tarefa como concluída.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string' } },
       required: ['id'],
@@ -94,7 +96,7 @@ const TOOLS = [
   {
     name: 'delete_task',
     description: 'Remove uma tarefa.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string' } },
       required: ['id'],
@@ -103,11 +105,11 @@ const TOOLS = [
   {
     name: 'add_interaction',
     description: 'Registra uma interação/contato com um lead.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: {
         leadId: { type: 'string' },
-        canal:  { type: 'string', enum: ['whatsapp', 'ligacao', 'email', 'instagram'] },
+        canal:  { type: 'string', description: 'whatsapp | ligacao | email | instagram' },
         nota:   { type: 'string', description: 'O que foi conversado ou feito' },
       },
       required: ['leadId', 'canal', 'nota'],
@@ -115,15 +117,54 @@ const TOOLS = [
   },
 ]
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+// ── Helpers ───────────────────────────────────────────────
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY não configurada no servidor.' })
+function toGeminiContents(messages) {
+  const result = []
+  let i = 0
 
-  const { messages, crmContext } = req.body
-  if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages inválido' })
+  while (i < messages.length) {
+    const msg = messages[i]
 
+    if (msg.role === 'user') {
+      result.push({ role: 'user', parts: [{ text: msg.content || '' }] })
+      i++
+    } else if (msg.role === 'assistant') {
+      if (msg.toolCalls?.length) {
+        result.push({
+          role: 'model',
+          parts: msg.toolCalls.map(tc => ({
+            functionCall: { name: tc.name, args: tc.args || {} },
+          })),
+        })
+      } else {
+        result.push({ role: 'model', parts: [{ text: msg.content || '' }] })
+      }
+      i++
+    } else if (msg.role === 'tool') {
+      // Group consecutive tool results into a single user turn
+      const parts = []
+      while (i < messages.length && messages[i].role === 'tool') {
+        let responseData
+        try { responseData = JSON.parse(messages[i].content) } catch { responseData = { result: messages[i].content } }
+        parts.push({
+          functionResponse: {
+            name: messages[i].toolName,
+            response: responseData,
+          },
+        })
+        i++
+      }
+      result.push({ role: 'user', parts })
+    } else {
+      i++
+    }
+  }
+
+  return result
+}
+
+function buildSystemPrompt(crmContext) {
   const leads        = crmContext?.leads        || []
   const tasks        = crmContext?.tasks        || []
   const interactions = crmContext?.interactions || []
@@ -134,55 +175,88 @@ export default async function handler(req, res) {
     novo_contato: 'Novo Contato', primeiro_contato: 'Primeiro Contato Feito',
     aguardando_conta: 'Aguardando Conta de Luz', conta_recebida: 'Conta Recebida',
     proposta_enviada: 'Proposta Enviada', em_negociacao: 'Em Análise / Negociação',
-    fechado_ganho: 'Fechado (Ganho) ✅', cobrar_comprovante: 'Cobrar Comprovante',
-    fechado_perdido: 'Fechado (Perdido) ❌',
+    fechado_ganho: 'Fechado (Ganho)', cobrar_comprovante: 'Cobrar Comprovante',
+    fechado_perdido: 'Fechado (Perdido)',
   }
 
-  const pendingTasks  = tasks.filter(t => !t.concluida)
-  const overdueTasks  = pendingTasks.filter(t => new Date(t.dataVencimento) < new Date())
+  const pendingTasks = tasks.filter(t => !t.concluida)
+  const overdueTasks = pendingTasks.filter(t => new Date(t.dataVencimento) < new Date())
 
-  const systemPrompt = `Você é o assistente de IA do CRM Matrix Energia — sistema de gestão de leads para consultor de vendas no Mercado Livre de Energia.
+  return `Você é o assistente de IA do CRM Matrix Energia — sistema de gestão de leads para consultor de vendas no Mercado Livre de Energia.
 
 CONSULTOR: ${config.nomeConsultor || 'Consultor'}
-DATA/HORA: ${now} (horário de Brasília)
-METAS DO MÊS: ${config.metaLeadsMes || 20} leads / ${config.metaContratosMes || 5} contratos
+DATA/HORA: ${now}
+METAS: ${config.metaLeadsMes || 20} leads/mês · ${config.metaContratosMes || 5} contratos/mês
 
-══════ LEADS (${leads.length} total) ══════
-${leads.length === 0 ? 'Nenhum lead cadastrado.' : leads.map(l =>
-  `[${l.id}] ${l.nome} | ${l.telefone}${l.email ? ` | ${l.email}` : ''} | ${l.cidade || '?'}/${l.uf || '?'} | ${stageNames[l.status] || l.status}${l.consumoMedio ? ` | ${l.consumoMedio} kWh` : ''}${l.valorEstimado ? ` | R$${l.valorEstimado}/mês` : ''}${l.anotacoes ? ` | Nota: ${l.anotacoes.slice(0, 60)}` : ''}`
+══════ LEADS (${leads.length}) ══════
+${leads.length === 0 ? 'Nenhum lead.' : leads.map(l =>
+  `[${l.id}] ${l.nome} | ${l.telefone}${l.email ? ' | ' + l.email : ''} | ${l.cidade || '?'}/${l.uf || '?'} | ${stageNames[l.status] || l.status}${l.consumoMedio ? ' | ' + l.consumoMedio + ' kWh' : ''}${l.valorEstimado ? ' | R$' + l.valorEstimado + '/mês' : ''}${l.anotacoes ? ' | ' + l.anotacoes.slice(0, 50) : ''}`
 ).join('\n')}
 
-══════ TAREFAS PENDENTES (${pendingTasks.length}, ${overdueTasks.length} em atraso) ══════
-${pendingTasks.length === 0 ? 'Nenhuma tarefa pendente.' : pendingTasks.map(t => {
+══════ TAREFAS PENDENTES (${pendingTasks.length} · ${overdueTasks.length} em atraso) ══════
+${pendingTasks.length === 0 ? 'Nenhuma.' : pendingTasks.map(t => {
   const lead = leads.find(l => l.id === t.leadId)
-  return `[${t.id}] ${t.descricao} | Vence: ${t.dataVencimento?.slice(0,10)}${lead ? ` | Lead: ${lead.nome}` : ' | Tarefa avulsa'}`
+  return `[${t.id}] ${t.descricao} | Vence: ${t.dataVencimento?.slice(0, 10)}${lead ? ' | ' + lead.nome : ''}`
 }).join('\n')}
 
-══════ INTERAÇÕES RECENTES (${Math.min(interactions.length, 30)} de ${interactions.length}) ══════
-${interactions.length === 0 ? 'Nenhuma interação registrada.' : interactions.slice(0, 30).map(i => {
+══════ INTERAÇÕES RECENTES (${Math.min(interactions.length, 20)}) ══════
+${interactions.slice(0, 20).map(i => {
   const lead = leads.find(l => l.id === i.leadId)
-  return `${i.data?.slice(0,10)} | ${lead?.nome || '?'} | ${i.canal} | ${i.nota?.slice(0, 80)}`
-}).join('\n')}
+  return `${i.data?.slice(0, 10)} | ${lead?.nome || '?'} | ${i.canal} | ${i.nota?.slice(0, 60)}`
+}).join('\n') || 'Nenhuma.'}
 
-══════ INSTRUÇÕES ══════
-• Use as ferramentas para criar, editar e gerenciar dados quando solicitado.
-• Após executar ações, confirme o que foi feito de forma clara.
-• Para análises, seja proativo em sugerir próximos passos.
-• Responda SEMPRE em português brasileiro. Seja direto e objetivo.
-• Quando o usuário mencionar um lead pelo nome (parcial), localize o ID correto antes de agir.`
+ETAPAS: novo_contato → primeiro_contato → aguardando_conta → conta_recebida → proposta_enviada → em_negociacao → fechado_ganho | cobrar_comprovante | fechado_perdido
+
+REGRAS:
+- Use as funções disponíveis para criar, editar e gerenciar dados quando solicitado.
+- Após ações, confirme o que foi feito de forma clara e concisa.
+- Ao referenciar um lead pelo nome (parcial), localize o ID correto antes de agir.
+- Responda SEMPRE em português brasileiro.`
+}
+
+// ── Handler ───────────────────────────────────────────────
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' })
+
+  const { messages, crmContext } = req.body
+  if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages inválido' })
 
   try {
-    const client = new Anthropic({ apiKey })
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages,
-      tools: TOOLS,
+    const genAI    = new GoogleGenerativeAI(apiKey)
+    const model    = genAI.getGenerativeModel({
+      model:             'gemini-2.0-flash',
+      systemInstruction: buildSystemPrompt(crmContext),
+      tools:             [{ functionDeclarations: FUNCTION_DECLARATIONS }],
+      toolConfig:        { functionCallingConfig: { mode: 'AUTO' } },
     })
-    return res.json(response)
+
+    const contents  = toGeminiContents(messages)
+    const result    = await model.generateContent({ contents })
+    const candidate = result.response.candidates[0]
+    const parts     = candidate.content.parts
+
+    // Function calls
+    const funcCalls = parts.filter(p => p.functionCall)
+    if (funcCalls.length > 0) {
+      return res.json({
+        type:      'tool_calls',
+        toolCalls: funcCalls.map((p, i) => ({
+          id:   `tc_${Date.now()}_${i}`,
+          name: p.functionCall.name,
+          args: p.functionCall.args || {},
+        })),
+      })
+    }
+
+    // Text response
+    const text = parts.filter(p => p.text).map(p => p.text).join('')
+    return res.json({ type: 'done', text })
   } catch (err) {
-    console.error('[chat] Anthropic error:', err.message)
-    return res.status(500).json({ error: err.message || 'Erro ao chamar Claude API' })
+    console.error('[chat] Gemini error:', err.message)
+    return res.status(500).json({ error: err.message || 'Erro ao chamar Gemini API' })
   }
 }

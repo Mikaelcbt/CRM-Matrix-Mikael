@@ -2249,8 +2249,7 @@ function AIChatPanel({ isOpen, onClose, leads, tasks, interactions, config, onAc
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
-    const userApiMsg = { role: 'user', content: trimmed }
-    let currentMsgs  = [...apiMessages, userApiMsg]
+    let currentMsgs = [...apiMessages, { role: 'user', content: trimmed }]
 
     setApiMessages(currentMsgs)
     setDisplayMsgs(prev => [...prev, { type: 'user', text: trimmed }])
@@ -2259,10 +2258,9 @@ function AIChatPanel({ isOpen, onClose, leads, tasks, interactions, config, onAc
 
     try {
       const toolsExecuted = []
-      let finalText = ''
 
       while (true) {
-        const res  = await fetch('/api/chat', {
+        const res = await fetch('/api/chat', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ messages: currentMsgs, crmContext: buildContext() }),
@@ -2275,34 +2273,31 @@ function AIChatPanel({ isOpen, onClose, leads, tasks, interactions, config, onAc
 
         const data = await res.json()
 
-        if (data.stop_reason === 'tool_use') {
-          const toolUses    = data.content.filter(b => b.type === 'tool_use')
-          const toolResults = []
+        if (data.type === 'tool_calls') {
+          currentMsgs = [...currentMsgs, { role: 'assistant', content: null, toolCalls: data.toolCalls }]
 
-          for (const tool of toolUses) {
+          for (const tc of data.toolCalls) {
+            let result
             try {
-              const result = await onAction(tool.name, tool.input)
-              toolsExecuted.push({ name: tool.name, input: tool.input })
-              toolResults.push({ type: 'tool_result', tool_use_id: tool.id, content: JSON.stringify(result ?? { success: true }) })
+              result = await onAction(tc.name, tc.args)
+              toolsExecuted.push({ name: tc.name })
             } catch (e) {
-              toolResults.push({ type: 'tool_result', tool_use_id: tool.id, content: JSON.stringify({ error: e.message }), is_error: true })
+              result = { error: e.message }
             }
+            currentMsgs = [...currentMsgs, {
+              role:       'tool',
+              toolCallId: tc.id,
+              toolName:   tc.name,
+              content:    JSON.stringify(result ?? { success: true }),
+            }]
           }
-
-          currentMsgs = [
-            ...currentMsgs,
-            { role: 'assistant', content: data.content },
-            { role: 'user', content: toolResults },
-          ]
         } else {
-          finalText   = data.content?.find?.(b => b.type === 'text')?.text || ''
-          currentMsgs = [...currentMsgs, { role: 'assistant', content: data.content }]
+          currentMsgs = [...currentMsgs, { role: 'assistant', content: data.text }]
+          setApiMessages(currentMsgs)
+          setDisplayMsgs(prev => [...prev, { type: 'assistant', text: data.text || '', toolsUsed: toolsExecuted }])
           break
         }
       }
-
-      setApiMessages(currentMsgs)
-      setDisplayMsgs(prev => [...prev, { type: 'assistant', text: finalText, toolsUsed: toolsExecuted }])
     } catch (err) {
       setDisplayMsgs(prev => [...prev, { type: 'error', text: err.message }])
     } finally {
@@ -2412,8 +2407,8 @@ function AIChatPanel({ isOpen, onClose, leads, tasks, interactions, config, onAc
                   </div>
                   <div className="flex-1 bg-red-500/10 border border-red-500/20 rounded-2xl rounded-tl-md px-4 py-3 text-sm text-red-400 leading-relaxed">
                     {msg.text}
-                    {msg.text?.includes('ANTHROPIC_API_KEY') && (
-                      <p className="mt-2 text-xs text-red-400/70">Adicione ANTHROPIC_API_KEY nas variáveis de ambiente do Vercel.</p>
+                    {msg.text?.includes('GEMINI_API_KEY') && (
+                      <p className="mt-2 text-xs text-red-400/70">Adicione GEMINI_API_KEY nas variáveis de ambiente do Vercel.</p>
                     )}
                   </div>
                 </div>
